@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>智绘几何 - 爱晚亭：第一人称沉浸体验</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <div class="logo">🍁 智绘几何 | 爱晚亭沉浸式教学</div>
+        <div style="font-size: 12px; color: #c0392b; font-weight: bold;">当前模式：第一人称行走</div>
+    </header>
+
+    <div id="stage-nav">
+        <button class="stage-btn active" onclick="window.switchStage(1)">1</button>
+        <button class="stage-btn" onclick="window.switchStage(2)">2</button>
+        <button class="stage-btn" onclick="window.switchStage(3)">3</button>
+    </div>
+
+    <div id="control-panel">
+        <div id="panel-1" class="panel-section active">
+            <h3>🌄 场景一：漫步枫林路</h3>
+            <p>💡 <b>操作指南：</b><br>滚动鼠标滚轮，以孩童视角沿着道路前进或后退，走近爱晚亭。</p>
+            <button class="tool-btn active" onclick="window.toggleLeaves()">🍂 落叶特效 (开/关)</button>
+            </div>
+
+        <div id="panel-2" class="panel-section">
+            <h3>🏗️ 场景二：解构四柱支撑</h3>
+            <p>拖动滑块观察结构，按住鼠标左键旋转视角。</p>
+            <label>💥 四柱水平拆解</label>
+            <input type="range" min="0" max="3" step="0.1" value="0" oninput="window.updatePillarExplode(this.value)">
+
+            <label>🔪 整体垂直剖切</label>
+            <input type="range" min="-1" max="7" step="0.1" value="7" oninput="window.updateClipping(this.value)">
+        </div>
+
+        <div id="panel-3" class="panel-section">
+            <h3>📐 场景三：几何对比</h3>
+            <p>对比爱晚亭的方形平面与四柱结构。</p>
+            <button class="tool-btn" onclick="window.snapView('top')">俯视图 (方形结构)</button>
+            <button class="tool-btn" id="btn-overlay" onclick="window.toggleOverlay()">🟥 叠加四柱几何体</button>
+        </div>
+    </div>
+
+    <div id="loading">正在构建沉浸式场景...</div>
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
