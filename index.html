@@ -2,49 +2,73 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>智绘几何 - 爱晚亭：第一人称沉浸体验</title>
+    <title>智绘几何 | 爱晚亭：小小建筑师</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <header>
-        <div class="logo">🍁 智绘几何 | 爱晚亭沉浸式教学</div>
-        <div style="font-size: 12px; color: #c0392b; font-weight: bold;">当前模式：第一人称行走</div>
+        <div class="logo">☀️ 智绘几何 <span style="font-size:14px; color:#555; margin-left:10px;">青少年立体几何探索</span></div>
+        <div class="header-tools">
+            <button class="icon-btn" onclick="window.takeSnapshot()" title="生成海报">📸 拍照打卡</button>
+            <div class="score-board" id="scoreBoard">🏆 积分: 0</div>
+        </div>
     </header>
 
     <div id="stage-nav">
-        <button class="stage-btn active" onclick="window.switchStage(1)">1</button>
-        <button class="stage-btn" onclick="window.switchStage(2)">2</button>
-        <button class="stage-btn" onclick="window.switchStage(3)">3</button>
+        <button class="stage-btn active" onclick="window.switchStage(1)" title="漫步模式">🏃</button>
+        <button class="stage-btn" onclick="window.switchStage(2)" title="解构模式">🔨</button>
+        <button class="stage-btn" onclick="window.switchStage(3)" title="寻宝与测量">📐</button>
     </div>
 
     <div id="control-panel">
+        
         <div id="panel-1" class="panel-section active">
-            <h3>🌄 场景一：漫步枫林路</h3>
-            <p>💡 <b>操作指南：</b><br>滚动鼠标滚轮，以孩童视角沿着道路前进或后退，走近爱晚亭。</p>
-            <button class="tool-btn active" onclick="window.toggleLeaves()">🍂 落叶特效 (开/关)</button>
-            </div>
-
+            <h3>🏫 场景一：漫步爱晚亭</h3>
+            <p>👋 <b>操作指南：</b><br>
+               <b>[W][A][S][D]</b> 键控制前后左右移动<br>
+               <b>按住鼠标左键</b> 拖动转换视角
+            </p>
+            <button class="tool-btn active" onclick="window.toggleLeaves()">🍃 自然落叶 (开/关)</button>
+        </div>
+        
         <div id="panel-2" class="panel-section">
-            <h3>🏗️ 场景二：解构四柱支撑</h3>
-            <p>拖动滑块观察结构，按住鼠标左键旋转视角。</p>
-            <label>💥 四柱水平拆解</label>
+            <h3>📐 场景二：我是建筑师</h3>
+            <p>像搭积木一样拆解古建筑。</p>
+            
+            <label>🏗️ 拆解屋顶 (观察榫卯)</label>
             <input type="range" min="0" max="3" step="0.1" value="0" oninput="window.updatePillarExplode(this.value)">
 
-            <label>🔪 整体垂直剖切</label>
+            <label>🔍 X光透视 (看横截面)</label>
             <input type="range" min="-1" max="7" step="0.1" value="7" oninput="window.updateClipping(this.value)">
         </div>
 
         <div id="panel-3" class="panel-section">
-            <h3>📐 场景三：几何对比</h3>
-            <p>对比爱晚亭的方形平面与四柱结构。</p>
-            <button class="tool-btn" onclick="window.snapView('top')">俯视图 (方形结构)</button>
-            <button class="tool-btn" id="btn-overlay" onclick="window.toggleOverlay()">🟥 叠加四柱几何体</button>
+            <h3>🎮 场景三：几何工坊</h3>
+            
+            <div class="mode-switch">
+                <button class="tool-btn active" id="btn-mode-game" onclick="window.setInteractMode('game')">🔍 寻找圆柱体</button>
+                <button class="tool-btn" id="btn-mode-measure" onclick="window.setInteractMode('measure')">📏 测量工具 (AR尺子)</button>
+            </div>
+
+            <p id="game-instruction" style="color:#e67e22; font-size:13px;">任务：请在亭子中找到“圆柱体”并点击它！</p>
+            
+            <div id="measure-result" style="display:none; background:#f0f9ff; padding:10px; border-radius:8px; border:1px solid #1E90FF; text-align:center;">
+                <span style="font-size:12px; color:#666;">测量距离</span><br>
+                <strong style="font-size:20px; color:#1E90FF;" id="distance-value">0.00</strong> 米
+                <div style="font-size:10px; color:#999; margin-top:5px;">(点击场景两点进行测量)</div>
+            </div>
+
+            <button class="tool-btn" style="margin-top:10px;" onclick="window.showHint()">❓哪怕给点提示</button>
         </div>
     </div>
 
-    <div id="loading">正在构建沉浸式场景...</div>
+    <div id="loading">🚀 正在加载阳光课堂...</div>
     <div id="canvas-container"></div>
+    
+    <div id="toast" class="toast">回答正确！+10分</div>
+    
+    <div id="measure-label" class="measure-label">起点</div>
 
     <script type="importmap">
         {
@@ -54,7 +78,6 @@
             }
         }
     </script>
-
     <script type="module" src="app.js"></script>
 </body>
 </html>
