@@ -13,14 +13,22 @@ import urllib3
 # 禁用安全警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# --- ⚙️ 配置区域 ---
+# --- ⚙️ Coze 工作流配置区域 (请修改这里) ---
 PORT = 8000
-DIFY_API_KEY = "app-slk51YyxH6TzO1ThCfyDc7Yr" 
-DIFY_API_URL = "https://api.dify.ai/v1/workflows/run" 
 
-# ❗ 梯子端口 (Clash=7890, v2ray=10809)
-PROXY_PORT = 7897
-USE_PROXY = True 
+# 1. 填入你的 Coze 令牌
+COZE_API_TOKEN = "pat_lpiUm6EZk8d3DZQ5ju7cNi0OtBYXZwywi58fZ8Wmesc3zNvgVYGYXXeh6yehrElY" 
+
+# 2. 填入你的 Workflow ID (注意：这里现在叫 WORKFLOW_ID 了)
+# 你的 ID: 7598567274862198836
+COZE_WORKFLOW_ID = "7598567274862198836" 
+
+# 3. 梯子设置 (Coze 国内版直连，无需梯子)
+USE_PROXY = False 
+PROXY_PORT = 7890 
+
+# 🔥🔥🔥 核心修改：地址改为 Workflow 专用接口 🔥🔥🔥
+COZE_API_URL = "https://api.coze.cn/v1/workflow/run"
 
 # --- 基础配置 ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,56 +60,86 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 data = json.loads(post_data.decode('utf-8'))
                 user_action = data.get('action', '')
-                print(f"📡 前端请求: {user_action}")
+                print(f"📡 发送给 Coze 工作流: {user_action}")
 
-                payload = {
-                    "inputs": { "query": user_action },
-                    "response_mode": "blocking",
-                    "user": "student-01"
+                # --- 1. 构造 Coze Workflow 请求格式 ---
+                headers = {
+                    "Authorization": f"Bearer {COZE_API_TOKEN}",
+                    "Content-Type": "application/json"
                 }
                 
-                headers = { "Authorization": f"Bearer {DIFY_API_KEY}", "Content-Type": "application/json" }
-                proxies = { "http": f"http://127.0.0.1:{PROXY_PORT}", "https": f"http://127.0.0.1:{PROXY_PORT}" } if USE_PROXY else {}
+                # 🔥🔥🔥 关键修改：工作流的参数结构 🔥🔥🔥
+                # 这里的 key 必须和你 Coze 编排页面里【开始节点】的变量名一致！
+                # 你说你的变量名是 "input"，所以这里写 "input": user_action
+                payload = {
+                    "workflow_id": COZE_WORKFLOW_ID,
+                    "parameters": {
+                        "input": user_action 
+                    }
+                }
 
-                print("⏳ 正在请求 Dify...")
-                response = requests.post(DIFY_API_URL, json=payload, headers=headers, proxies=proxies, verify=False, timeout=30)
+                # --- 2. 代理逻辑 ---
+                proxies = {}
+                if USE_PROXY:
+                    proxy_url = f"http://127.0.0.1:{PROXY_PORT}"
+                    proxies = { "http": proxy_url, "https": proxy_url }
+                    print(f"🔄 使用代理: {proxy_url}")
+                else:
+                    print("🚀 直连 Coze 国内版 (无代理)")
+
+                # --- 3. 发送请求 ---
+                response = requests.post(
+                    COZE_API_URL, 
+                    json=payload, 
+                    headers=headers, 
+                    proxies=proxies,
+                    verify=False,
+                    timeout=60
+                )
                 
+                # --- 4. 解析 Coze Workflow 的返回结果 ---
                 if response.status_code == 200:
-                    dify_data = response.json()
-                    ai_reply = "（老师好像在发呆...）"
+                    res_json = response.json()
+                    ai_reply = "老师正在思考..."
                     
-                    # 🔥🔥🔥 核心修改：暴力提取回复内容 🔥🔥🔥
-                    if dify_data.get('data', {}).get('status') == 'succeeded':
-                        outputs = dify_data.get('data', {}).get('outputs', {})
+                    # Coze Workflow 成功返回 code: 0
+                    if res_json.get('code') == 0:
+                        # Workflow 的返回值通常在 data 字段里，它可能是一个 JSON 字符串
+                        raw_data = res_json.get('data', "")
                         
-                        if outputs:
-                            # 1. 尝试找 text 字段
-                            if 'text' in outputs:
-                                ai_reply = outputs['text']
-                            # 2. 尝试找 answer 字段
-                            elif 'answer' in outputs:
-                                ai_reply = outputs['answer']
-                            # 3. 如果都没有，直接取第一个值（不管叫什么名字）
+                        # 尝试解析 data 里的内容
+                        try:
+                            # 如果 data 是字符串（JSON String），需要二次解析
+                            if isinstance(raw_data, str):
+                                parsed_data = json.loads(raw_data)
                             else:
-                                first_value = next(iter(outputs.values()))
-                                ai_reply = str(first_value)
-                        else:
-                            ai_reply = "Dify 运行成功但没有输出内容，请检查工作流的‘结束’节点。"
+                                parsed_data = raw_data
+                            
+                            # 尝试获取 output (如果你工作流结束节点输出叫 output)
+                            # 或者直接把整个结果转成字符串
+                            if isinstance(parsed_data, dict):
+                                ai_reply = parsed_data.get('output', str(parsed_data))
+                            else:
+                                ai_reply = str(parsed_data)
+                                
+                        except:
+                            # 如果解析失败，直接显示原始 data
+                            ai_reply = str(raw_data)
+                            
                     else:
-                        print(f"Workflow 状态异常: {dify_data}")
-                    
-                    print(f"✅ 后端获取成功: {ai_reply}") # 这一步你在控制台看到了
-                    
-                    # 🔥🔥🔥 关键：把内容打包发回给前端 🔥🔥🔥
+                        print(f"Coze 业务报错: {res_json}")
+                        ai_reply = f"工作流报错: {res_json.get('msg')}"
+
+                    print(f"✅ Coze 回复: {ai_reply}")
                     self.send_json_response({"success": True, "message": ai_reply})
                 
                 else:
-                    print(f"❌ Dify 报错: {response.status_code} - {response.text}")
+                    print(f"❌ HTTP 报错: {response.status_code} - {response.text}")
                     self.send_json_response({"success": True, "message": f"连接错误: {response.status_code}"})
 
             except Exception as e:
-                print(f"❌ 服务器错误: {e}")
-                self.send_json_response({"success": True, "message": "Python 后端处理出错"})
+                print(f"❌ 服务器内部错误: {e}")
+                self.send_json_response({"success": True, "message": f"Python 后端报错: {str(e)}"})
         else:
             self.send_error(404)
 
