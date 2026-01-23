@@ -1,30 +1,21 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-// ✨ 新增：引入 HDR 加载器
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
-// --- 变量池 ---
 let scene, camera, renderer, controls;
 let mainModel = null;
 let leavesSystem, leavesActive = true;
 let proxyPillarsGroup = new THREE.Group(); 
 let score = 0;
 let interactMode = 'game'; 
-
-// 地形相关
 let terrainMesh = null;
-
-// 交互相关
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 let isFirstPersonMode = true;
 let isDragging = false;
 let previousMousePosition = { x: 0, y: 0 };
 const keyState = { w: false, a: false, s: false, d: false };
-
-// 测量工具
-let measureMarkers = []; let measureLine = null;
 let sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 7);
 
 init();
@@ -32,7 +23,8 @@ animate();
 
 function init() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // 加载前的底色
+    scene.background = new THREE.Color(0x87CEEB); 
+    scene.fog = new THREE.Fog(0xccaa88, 10, 80); 
 
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
     setupFirstPersonCamera();
@@ -40,175 +32,243 @@ function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    
-    // ✨ 关键设置：HDR 需要电影级色调映射，否则会过曝一片白
     renderer.toneMapping = THREE.ACESFilmicToneMapping; 
-    renderer.toneMappingExposure = 0.9; // 调节曝光度 (越低越暗)
+    renderer.toneMappingExposure = 0.9; 
     renderer.localClippingEnabled = true;
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    // 灯光 (HDR 提供了环境光，但我们需要 DirectionalLight 产生投影)
     const sunLight = new THREE.DirectionalLight(0xffffff, 1.5); 
-    sunLight.position.set(30, 50, 20); // 💡 提示：最好根据 HDR 里太阳的位置调整这里的坐标
+    sunLight.position.set(30, 50, 20); 
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    // 扩大阴影范围
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 200;
-    sunLight.shadow.camera.left = -50;
-    sunLight.shadow.camera.right = 50;
-    sunLight.shadow.camera.top = 50;
-    sunLight.shadow.camera.bottom = -50;
+    sunLight.shadow.mapSize.width = 2048; sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5; sunLight.shadow.camera.far = 200;
+    sunLight.shadow.camera.left = -50; sunLight.shadow.camera.right = 50;
+    sunLight.shadow.camera.top = 50; sunLight.shadow.camera.bottom = -50;
     scene.add(sunLight);
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.enabled = false;
 
-    // --- 构建场景 ---
-    loadHDRBackground(); // ✨ 使用新的 HDR 加载函数
+    loadHDRBackground(); 
     createLowPolyTerrain(); 
     createStonePath();      
     createFallingLeaves();
     createProxyPillars(); 
     loadPavilion();
 
-    // 事件监听
     window.addEventListener('resize', onWindowResize);
     window.addEventListener('click', onMouseClick);
     window.addEventListener('wheel', onMouseWheel, { passive: false });
-    
     document.addEventListener('keydown', (e) => { if(keyState.hasOwnProperty(e.key.toLowerCase())) keyState[e.key.toLowerCase()] = true; });
     document.addEventListener('keyup', (e) => { if(keyState.hasOwnProperty(e.key.toLowerCase())) keyState[e.key.toLowerCase()] = false; });
     document.addEventListener('mousedown', (e) => { if(isFirstPersonMode) { isDragging = true; previousMousePosition = {x: e.clientX, y: e.clientY}; } });
     document.addEventListener('mouseup', () => { isDragging = false; });
     document.addEventListener('mousemove', onMouseMove);
+
+    setTimeout(() => { window.askTeacher('welcome'); }, 1500);
 }
 
-// ✨✨✨ 核心升级：加载 HDR 环境 ✨✨✨
+// --- 界面逻辑 ---
+window.toggleChat = () => {
+    const chatWindow = document.getElementById('chat-window');
+    chatWindow.classList.toggle('hidden');
+};
+
+window.handleKeyPress = (event) => { if (event.key === 'Enter') window.sendUserMessage(); };
+
+window.sendUserMessage = () => {
+    const input = document.getElementById('user-input');
+    const text = input.value.trim();
+    if (!text) return;
+    document.getElementById('chat-window').classList.remove('hidden');
+    addMessageToChat(text, 'user');
+    input.value = ''; 
+    window.askTeacher(text); 
+};
+
+// 🔥 核心：确保消息被加到 HTML 里 🔥
+function addMessageToChat(text, sender) {
+    const chatHistory = document.getElementById('chat-history');
+    if(!chatHistory) {
+        console.error("找不到聊天记录容器！");
+        return;
+    }
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', sender);
+    msgDiv.innerText = text; 
+    chatHistory.appendChild(msgDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight; // 自动滚动到底部
+}
+
+window.askTeacher = (actionType) => {
+    const video = document.getElementById('digital-human-video');
+    const chatHistory = document.getElementById('chat-history');
+
+    // 显示“Thinking...”
+    const loadingId = 'loading-' + Date.now();
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = loadingId;
+    loadingDiv.classList.add('message', 'teacher');
+    loadingDiv.style.color = '#888';
+    loadingDiv.innerText = "Thinking..."; 
+    if(chatHistory) {
+        chatHistory.appendChild(loadingDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+    if(video) video.src = "idle.mp4";
+
+    console.log("正在发送请求给后端:", actionType); // 调试日志
+
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: actionType })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // 移除 Thinking
+        const loadingMsg = document.getElementById(loadingId);
+        if(loadingMsg) loadingMsg.remove();
+
+        console.log("收到后端回复:", data); // 调试日志
+
+        if(data.success) {
+            // 🔥 收到回复，上屏！
+            if(video) { video.src = "talking.mp4"; video.play().catch(e=>{}); }
+            addMessageToChat(data.message, 'teacher');
+            setTimeout(() => { if(video) video.src = "idle.mp4"; }, Math.max(2000, data.message.length * 200));
+        } else {
+            // 后端说失败了
+            addMessageToChat(data.message || "老师没听清...", 'teacher');
+        }
+    })
+    .catch(err => {
+        const loadingMsg = document.getElementById(loadingId);
+        if(loadingMsg) loadingMsg.remove();
+        console.error("前端网络报错:", err);
+
+        // 离线兜底
+        if (actionType === 'welcome') {
+            const fallback = "同学们好！我是艾老师。（离线模式：我已准备好，虽然连不上云端，但可以带你参观！）";
+            addMessageToChat(fallback, 'teacher');
+            if(video) { video.src = "talking.mp4"; video.play().catch(e=>{}); }
+            setTimeout(() => { if(video) video.src = "idle.mp4"; }, 4000);
+        } else {
+            addMessageToChat("🔴 连接中断。请按 F12 看控制台报错。", 'teacher');
+        }
+    });
+};
+
+window.switchStage = (n) => {
+    document.querySelectorAll('.panel-section').forEach(p=>p.classList.remove('active')); 
+    document.getElementById('panel-'+n).classList.add('active');
+    document.querySelectorAll('.stage-btn').forEach(b=>b.classList.remove('active')); 
+    document.querySelectorAll('.stage-btn')[n-1].classList.add('active');
+    
+    if(n===1) { isFirstPersonMode=true; controls.enabled=false; setupFirstPersonCamera(); window.askTeacher('welcome'); }
+    else if(n===2) { isFirstPersonMode=false; controls.enabled=true; camera.position.set(8,6,10); controls.target.set(0,2,0); controls.update(); window.askTeacher('stage_2'); }
+    else { isFirstPersonMode=false; controls.enabled=true; camera.position.set(5,5,8); controls.target.set(0,2,0); controls.update(); window.setInteractMode('game'); window.askTeacher('stage_3'); }
+};
+
+window.setInteractMode = (m) => { 
+    interactMode = m; 
+};
+
+function onMouseClick(e) {
+    if (controls.enabled === false && !isFirstPersonMode) return; 
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    
+    if (interactMode === 'game') {
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        if (intersects.length > 0) {
+            const obj = intersects[0].object;
+            if (obj.userData.isPillar || obj.userData.isProxyPillar) {
+                showToast("🎉 恭喜！找到圆柱体！+10分"); 
+                score += 10; document.getElementById('scoreBoard').innerText = "🏆 积分: " + score;
+                obj.material.emissive = new THREE.Color(0x00FF00); setTimeout(() => obj.material.emissive.setHex(0), 500);
+                
+                document.getElementById('chat-window').classList.remove('hidden');
+                window.askTeacher('found_pillar');
+            }
+        }
+    } 
+}
+
+// ... 下面是 3D 构建代码，请保持原样 ...
+// loadHDRBackground, createLowPolyTerrain, createStonePath, updateFirstPersonMovement, createLowPolyTree, loadPavilion, createProxyPillars, createFallingLeaves, takeSnapshot, updatePillarExplode, updateClipping, toggleLeaves, showHint, showToast, setupFirstPersonCamera, onMouseWheel, onMouseMove, onWindowResize, animate
+// 确保这些函数都在！
+
 function loadHDRBackground() {
     const loader = new RGBELoader();
-    
-    // ⚠️ 确保 web 文件夹里有 sky.hdr 文件 (建议下载 2k 分辨率)
-    const bgUrl = 'sky.hdr'; 
-    
-    loader.load(bgUrl, (texture) => {
+    loader.load('sky.hdr', (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
-        
-        scene.background = texture;
-        scene.environment = texture; // 这句最关键！让模型反射 HDR 的光
-        
-        console.log("HDR 加载成功");
-    }, undefined, (err) => {
-        console.error("HDR 加载失败，请检查 web/sky.hdr 是否存在", err);
-        // 失败回退方案
-        scene.background = new THREE.Color(0x87CEEB);
-    });
+        scene.background = texture; scene.environment = texture; scene.fog=null;
+    }, undefined, () => scene.background = new THREE.Color(0x87CEEB));
 }
-
-// ⛰️ 地形
 function createLowPolyTerrain() {
+    const loader = new THREE.TextureLoader();
+    const tColor = loader.load('ground_diff.jpg'); tColor.wrapS=tColor.wrapT=THREE.RepeatWrapping; tColor.repeat.set(8,8); tColor.colorSpace=THREE.SRGBColorSpace;
+    const tNor = loader.load('ground_nor.jpg'); tNor.wrapS=tNor.wrapT=THREE.RepeatWrapping; tNor.repeat.set(8,8);
+    const tRough = loader.load('ground_rough.jpg'); tRough.wrapS=tRough.wrapT=THREE.RepeatWrapping; tRough.repeat.set(8,8);
     const geometry = new THREE.PlaneGeometry(200, 200, 64, 64);
     const pos = geometry.attributes.position;
     for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i);
-        let height = Math.random() * 1.5; 
-        if (Math.abs(x) < 4.5) height = -0.2; 
-        pos.setZ(i, height); 
+        const x = pos.getX(i); let height = Math.random() * 1.5; if (Math.abs(x) < 4.5) height = -0.1; pos.setZ(i, height); 
     }
     geometry.computeVertexNormals(); 
-    const material = new THREE.MeshStandardMaterial({ color: 0x556B2F, roughness: 1, flatShading: true });
-    
-    terrainMesh = new THREE.Mesh(geometry, material);
-    terrainMesh.rotation.x = -Math.PI / 2; 
-    terrainMesh.receiveShadow = true;
-    scene.add(terrainMesh);
-
-    // 种树
-    for (let i = 0; i < 40; i++) {
-        const x = (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 40);
-        const z = (Math.random() * 80) - 20;
-        createLowPolyTree(x, 0, z);
-    }
+    const material = new THREE.MeshStandardMaterial({ map: tColor, normalMap: tNor, roughnessMap: tRough, roughness: 0.8, color: 0xdddddd });
+    terrainMesh = new THREE.Mesh(geometry, material); terrainMesh.rotation.x = -Math.PI / 2; terrainMesh.receiveShadow = true; scene.add(terrainMesh);
+    for (let i = 0; i < 40; i++) { const x = (Math.random()>0.5?1:-1)*(5+Math.random()*40), z=(Math.random()*80)-20; createLowPolyTree(x, 0, z); }
 }
-
-// 🏃 WASD 移动 + 防穿模
+function createStonePath() {
+    const group = new THREE.Group();
+    const loader = new THREE.TextureLoader();
+    const tDiff = loader.load('path_diff.jpg'); tDiff.colorSpace = THREE.SRGBColorSpace;
+    const tNor = loader.load('path_nor.jpg'); const tRough = loader.load('path_rough.jpg');
+    const stoneColors = [0xdddddd, 0xcccccc, 0xbbbbbb];
+    let currentZ = 45;
+    while(currentZ > -25) {
+        const stonesInRow = Math.floor(Math.random() * 2) + 2; const rowWidth = 5; const segmentWidth = rowWidth / stonesInRow;
+        for(let i=0; i<stonesInRow; i++) {
+            const w = segmentWidth * (0.8 + Math.random()*0.2); const l = 1.2 * (0.8 + Math.random()*0.4); const h = 0.2 + Math.random() * 0.1;
+            const mat = new THREE.MeshStandardMaterial({ map: tDiff, normalMap: tNor, roughnessMap: tRough, color: stoneColors[Math.floor(Math.random()*stoneColors.length)], roughness: 0.8 });
+            const s = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), mat);
+            s.position.set(-rowWidth/2 + segmentWidth*i + segmentWidth/2 + (Math.random()-0.5)*0.2, 0.1, currentZ + (Math.random()-0.5)*0.2);
+            s.rotation.set((Math.random()-0.5)*0.05, (Math.random()-0.5)*0.1, 0); s.castShadow = true; s.receiveShadow = true; group.add(s);
+        }
+        currentZ -= 1.3;
+    }
+    scene.add(group);
+}
 function updateFirstPersonMovement() {
     if (!isFirstPersonMode) return;
-    const speed = 0.25; 
-    const dir = new THREE.Vector3();
-    
+    const speed = 0.25; const dir = new THREE.Vector3();
     if (keyState.w) { camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); camera.position.addScaledVector(dir, speed); }
     if (keyState.s) { camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); camera.position.addScaledVector(dir, -speed); }
-    
-    // 左右修正
     if (keyState.a || keyState.d) {
         camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); 
         const right = new THREE.Vector3(); right.crossVectors(camera.up, dir).normalize(); 
         if (keyState.a) camera.position.addScaledVector(right, speed);
         if (keyState.d) camera.position.addScaledVector(right, -speed);
     }
-
-    // 地形高度检测
     if (terrainMesh) {
-        const downRay = new THREE.Raycaster();
-        downRay.set(new THREE.Vector3(camera.position.x, 50, camera.position.z), new THREE.Vector3(0, -1, 0));
+        const downRay = new THREE.Raycaster(); downRay.set(new THREE.Vector3(camera.position.x, 50, camera.position.z), new THREE.Vector3(0, -1, 0));
         const intersects = downRay.intersectObject(terrainMesh);
-        
-        if (intersects.length > 0) {
-            camera.position.y = intersects[0].point.y + 1.2;
-        } else {
-            camera.position.y = 1.2;
-        }
+        if (intersects.length > 0) camera.position.y = intersects[0].point.y + 1.2; else camera.position.y = 1.2;
     }
-
-    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -20, 45); 
-    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -20, 20);
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -20, 45); camera.position.x = THREE.MathUtils.clamp(camera.position.x, -20, 20);
 }
-
-// ... 以下所有辅助函数保持不变，请务必保留 ...
-
-function createStonePath() {
-    const group = new THREE.Group();
-    const stoneColors = [0x999999, 0xaaaaaa, 0x888888, 0x777777];
-    let currentZ = 45;
-    while(currentZ > -25) {
-        const stonesInRow = Math.floor(Math.random() * 2) + 2; 
-        const rowWidth = 5;
-        const segmentWidth = rowWidth / stonesInRow;
-        for(let i=0; i<stonesInRow; i++) {
-            const width = segmentWidth * (0.8 + Math.random()*0.2);
-            const length = 1.2 * (0.8 + Math.random()*0.4);
-            const height = 0.2 + Math.random() * 0.1;
-            const geo = new THREE.BoxGeometry(width, height, length);
-            const mat = new THREE.MeshStandardMaterial({color: stoneColors[Math.floor(Math.random()*stoneColors.length)], roughness: 0.9});
-            const stone = new THREE.Mesh(geo, mat);
-            const x = -rowWidth/2 + segmentWidth*i + segmentWidth/2 + (Math.random()-0.5)*0.2;
-            stone.position.set(x, 0.1, currentZ + (Math.random()-0.5)*0.2);
-            stone.rotation.y = (Math.random()-0.5) * 0.1;
-            stone.rotation.x = (Math.random()-0.5) * 0.05;
-            stone.castShadow = true; stone.receiveShadow = true;
-            group.add(stone);
-        }
-        currentZ -= 1.3;
-    }
-    scene.add(group);
-}
-
 function createLowPolyTree(x, y, z) {
     const group = new THREE.Group();
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 3, 6), new THREE.MeshStandardMaterial({ color: 0x4a3c31 }));
     trunk.position.y = 1.5; trunk.castShadow = true; group.add(trunk);
     const colors = [0xd35400, 0xc0392b, 0xf39c12, 0xe67e22]; 
     const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(2.5, 0), new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random()*colors.length)], flatShading: true }));
-    leaves.position.y = 4; leaves.castShadow = true; 
-    leaves.scale.setScalar(0.8 + Math.random() * 0.5); leaves.rotation.set(Math.random(), Math.random(), Math.random());
-    group.add(leaves);
-    group.position.set(x, y, z); group.scale.setScalar(0.8 + Math.random() * 0.4);
-    scene.add(group);
+    leaves.position.y = 4; leaves.castShadow = true; leaves.scale.setScalar(0.8 + Math.random() * 0.5); leaves.rotation.set(Math.random(), Math.random(), Math.random());
+    group.add(leaves); group.position.set(x, y, z); group.scale.setScalar(0.8 + Math.random() * 0.4); scene.add(group);
 }
-
 function loadPavilion() {
     const loader = new GLTFLoader();
     loader.load('aiwan_pavilion.glb', (gltf) => {
@@ -217,14 +277,11 @@ function loadPavilion() {
         const maxDim = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
         const scale = 5.5 / maxDim; mainModel.scale.set(scale, scale, scale);
         const center = box.getCenter(new THREE.Vector3()).multiplyScalar(scale);
-        mainModel.position.sub(center); mainModel.position.y = -box.min.y * scale; 
-        mainModel.rotation.y = -Math.PI / 2;
+        mainModel.position.sub(center); mainModel.position.y = -box.min.y * scale; mainModel.rotation.y = -Math.PI / 2;
         mainModel.traverse(child => {
             if (child.isMesh) {
-                child.castShadow = true; child.receiveShadow = true;
-                child.userData.baseMaterial = child.material.clone();
-                child.material.clippingPlanes = [sectionPlane];
-                child.material.clipShadows = true; child.material.side = THREE.DoubleSide;
+                child.castShadow = true; child.receiveShadow = true; child.userData.baseMaterial = child.material.clone();
+                child.material.clippingPlanes = [sectionPlane]; child.material.clipShadows = true; child.material.side = THREE.DoubleSide;
                 const size = new THREE.Box3().setFromObject(child).getSize(new THREE.Vector3());
                 if(size.y > 2 && size.x < 1 && size.z < 1) child.userData.isPillar = true;
             }
@@ -232,69 +289,22 @@ function loadPavilion() {
         scene.add(mainModel); document.getElementById('loading').style.display = 'none';
     }, undefined, (err) => console.error(err));
 }
-
 function createProxyPillars() {
-    const pillarDist = 1.4;
-    const posList = [[pillarDist, pillarDist], [-pillarDist, pillarDist], [pillarDist, -pillarDist], [-pillarDist, -pillarDist]];
-    const geo = new THREE.CylinderGeometry(0.28, 0.28, 2.5, 16);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xFF4500 });
+    const pillarDist = 1.4; const posList = [[pillarDist, pillarDist], [-pillarDist, pillarDist], [pillarDist, -pillarDist], [-pillarDist, -pillarDist]];
+    const geo = new THREE.CylinderGeometry(0.28, 0.28, 2.5, 16); const mat = new THREE.MeshStandardMaterial({ color: 0xFF4500 });
     posList.forEach(pos => {
         const p = new THREE.Mesh(geo, mat); p.position.set(pos[0], 1.25, pos[1]);
-        p.userData.originPos = p.position.clone();
-        p.userData.explodeDir = new THREE.Vector3(pos[0], 0, pos[1]).normalize();
-        p.userData.isProxyPillar = true; proxyPillarsGroup.add(p);
+        p.userData.originPos = p.position.clone(); p.userData.explodeDir = new THREE.Vector3(pos[0], 0, pos[1]).normalize(); p.userData.isProxyPillar = true; proxyPillarsGroup.add(p);
     });
     proxyPillarsGroup.visible = false; scene.add(proxyPillarsGroup);
 }
-
 function createFallingLeaves() {
     const leafCount = 400; const geo = new THREE.BufferGeometry(); const pos=[], spd=[];
     for(let i=0; i<400; i++) { pos.push((Math.random()-0.5)*60, Math.random()*20+2, (Math.random()-0.5)*80+10); spd.push(0.02+Math.random()*0.03); }
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3)); geo.setAttribute('speed', new THREE.Float32BufferAttribute(spd,1));
     leavesSystem = new THREE.Points(geo, new THREE.PointsMaterial({color:0xFFA500, size:0.25, transparent:true})); scene.add(leavesSystem);
 }
-
-function onMouseClick(e) {
-    if (controls.enabled === false && !isFirstPersonMode) return; 
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    if (interactMode === 'game') {
-        const intersects = raycaster.intersectObjects(scene.children, true);
-        if (intersects.length > 0) {
-            const obj = intersects[0].object;
-            if (obj.userData.isPillar || obj.userData.isProxyPillar) {
-                showToast("🎉 恭喜！找到圆柱体！+10分"); score += 10; document.getElementById('scoreBoard').innerText = "🏆 积分: " + score;
-                obj.material.emissive = new THREE.Color(0x00FF00); setTimeout(() => obj.material.emissive.setHex(0), 500);
-            } else showToast("❌ 这个不是圆柱体哦");
-        }
-    } else if (interactMode === 'measure') {
-        const intersects = raycaster.intersectObjects(scene.children, true);
-        if (intersects.length > 0) addMeasureMarker(intersects[0].point);
-    }
-}
-
-function addMeasureMarker(pt) {
-    if (measureMarkers.length >= 2) { measureMarkers.forEach(m=>scene.remove(m)); measureMarkers=[]; if(measureLine){scene.remove(measureLine); measureLine=null;} document.getElementById('measure-result').style.display='none'; }
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshBasicMaterial({color:0x1E90FF, depthTest:false}));
-    m.position.copy(pt); m.renderOrder=999; scene.add(m); measureMarkers.push(m);
-    if (measureMarkers.length === 2) {
-        const p1=measureMarkers[0].position, p2=measureMarkers[1].position;
-        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]), new THREE.LineBasicMaterial({color:0x1E90FF, linewidth:3}));
-        scene.add(line); measureLine=line;
-        const dist = p1.distanceTo(p2).toFixed(2);
-        document.getElementById('measure-result').style.display='block'; document.getElementById('distance-value').innerText=dist;
-    }
-}
-
 window.takeSnapshot = () => { renderer.render(scene, camera); const l = document.createElement('a'); l.download = 'screenshot.png'; l.href = renderer.domElement.toDataURL('image/png'); l.click(); showToast("📸 已截图"); };
-window.switchStage = (n) => {
-    document.querySelectorAll('.panel-section').forEach(p=>p.classList.remove('active')); document.getElementById('panel-'+n).classList.add('active');
-    document.querySelectorAll('.stage-btn').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.stage-btn')[n-1].classList.add('active');
-    if(n===1) { isFirstPersonMode=true; controls.enabled=false; setupFirstPersonCamera(); }
-    else { isFirstPersonMode=false; controls.enabled=true; camera.position.set(8,6,10); controls.target.set(0,2,0); controls.update(); }
-    if(n===3) window.setInteractMode('game');
-};
-window.setInteractMode = (m) => { interactMode=m; measureMarkers=[]; document.getElementById('btn-mode-game').classList.toggle('active', m==='game'); document.getElementById('btn-mode-measure').classList.toggle('active', m==='measure'); };
 window.updatePillarExplode = (v) => { const f=parseFloat(v); proxyPillarsGroup.visible=f>0.1||!isFirstPersonMode; proxyPillarsGroup.children.forEach(p=>p.position.copy(p.userData.originPos).add(p.userData.explodeDir.clone().multiplyScalar(f*1.5))); };
 window.updateClipping = (v) => { sectionPlane.constant=parseFloat(v); };
 window.toggleLeaves = () => { leavesActive=!leavesActive; leavesSystem.visible=leavesActive; };
