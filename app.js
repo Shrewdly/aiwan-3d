@@ -2,154 +2,143 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// --- 全局变量 ---
+// --- 变量池 ---
 let scene, camera, renderer, controls;
 let mainModel = null;
 let leavesSystem, leavesActive = true;
-let proxyPillarsGroup = new THREE.Group();
-let overlayPillarsGroup = new THREE.Group();
-// 调整初始剖切高度，确保完整显示
-let sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 7); 
+let proxyPillarsGroup = new THREE.Group(); 
+let score = 0;
 
-// ✨ 新增：第一人称模式状态标志
-let isFirstPersonMode = true; // 默认开启
+// 交互模式
+let interactMode = 'game'; 
 
-// ✨ 新增：用于第一人称视角的鼠标拖拽变量
+// 鼠标交互 (视角旋转)
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+let isFirstPersonMode = true;
 let isDragging = false;
 let previousMousePosition = { x: 0, y: 0 };
+
+// ✨ 新增：键盘运动状态记录
+const keyState = {
+    w: false,
+    a: false,
+    s: false,
+    d: false
+};
+
+// 剖切平面
+let sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 7);
+
 init();
 animate();
 
 function init() {
-    // 1. 场景
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x3e1e1e);
-    scene.fog = new THREE.FogExp2(0x3e1e1e, 0.02); // 雾气稍微调淡一点
+    scene.background = new THREE.Color(0x87CEEB); 
+    scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
 
-    // 2. 相机
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    
-    // ✨ 修改：初始设置为第一人称视角
     setupFirstPersonCamera();
 
-    // 3. 渲染器
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.localClippingEnabled = true;
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    // 4. 灯光
-    const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x442222, 0.6);
-    scene.add(hemiLight);
-    const dirLight = new THREE.DirectionalLight(0xffaa33, 1.5);
-    dirLight.position.set(5, 8, 10); 
-    dirLight.castShadow = true;
-    // 优化阴影范围
-    dirLight.shadow.camera.top = 20;
-    dirLight.shadow.camera.bottom = -20;
-    dirLight.shadow.camera.left = -20;
-    dirLight.shadow.camera.right = 20;
-    scene.add(dirLight);
+    // 灯光
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    const sunLight = new THREE.DirectionalLight(0xffffee, 1.3);
+    sunLight.position.set(15, 20, 10);
+    sunLight.castShadow = true;
+    scene.add(sunLight);
+    createSunVisual();
 
-    // 5. 控制器 (初始化但不马上启用，由 switchStage 管理)
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.maxPolarAngle = Math.PI / 2 - 0.02;
-    // ✨ 修改：初始禁用轨道控制器，因为默认是第一人称
     controls.enabled = false;
 
-    // --- 场景构建 ---
+    // 构建场景
     createEnvironment();
     createFallingLeaves();
     createProxyPillars(); 
-
-    // 6. 加载模型
     loadPavilion();
 
-    // ✨ 新增：添加滚轮事件监听器用于行走
-    window.addEventListener('wheel', onMouseWheel, { passive: false });
+    // 事件监听
     window.addEventListener('resize', onWindowResize);
-
-    // ✨ 新增：鼠标拖拽监听 (用于第一人称转头)
-    document.addEventListener('mousedown', (e) => {
-        if (isFirstPersonMode) {
-            isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        }
-    });
-
-    document.addEventListener('mouseup', () => {
-        isDragging = false;
-    });
-
-    document.addEventListener('mousemove', onMouseMove);
-}
-
-// --- ✨ 新增：核心第一人称逻辑 ---
-
-// 设置第一人称相机位置 (孩童视角)
-function setupFirstPersonCamera() {
-    camera.position.set(0, 1.2, 25);
+    window.addEventListener('click', onMouseClick);
     
-    // ✨ 新增：设置旋转顺序，确保第一人称视角操作顺滑
-    camera.rotation.order = 'YXZ'; 
-    camera.rotation.set(0, 0, 0); 
+    // ✨ 新增：键盘按下监听
+    document.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (keyState.hasOwnProperty(key)) keyState[key] = true;
+    });
+
+    // ✨ 新增：键盘抬起监听
+    document.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        if (keyState.hasOwnProperty(key)) keyState[key] = false;
+    });
+    
+    // 鼠标拖拽视角
+    document.addEventListener('mousedown', (e) => {
+        if(isFirstPersonMode) { isDragging = true; previousMousePosition = {x: e.clientX, y: e.clientY}; }
+    });
+    document.addEventListener('mouseup', () => { isDragging = false; });
+    document.addEventListener('mousemove', onMouseMove);
+    
+    // ✏️ 移除了原来的 wheel 事件监听
 }
 
-// 处理滚轮行走事件
-function onMouseWheel(event) {
+// 🏃 核心逻辑：第一人称移动处理 (每一帧调用)
+function updateFirstPersonMovement() {
     if (!isFirstPersonMode) return;
 
-    event.preventDefault();
-    const walkSpeed = 0.8;
+    const speed = 0.25; // 移动速度
+    const direction = new THREE.Vector3();
 
-    if (event.deltaY < 0) {
-        camera.position.z -= walkSpeed;
-    } else {
-        camera.position.z += walkSpeed;
+    // 前后移动 (W/S)
+    if (keyState.w) {
+        camera.getWorldDirection(direction); // 获取相机看向的方向
+        direction.y = 0; // 锁定Y轴，防止飞向天空
+        direction.normalize();
+        camera.position.addScaledVector(direction, speed);
+    }
+    if (keyState.s) {
+        camera.getWorldDirection(direction);
+        direction.y = 0;
+        direction.normalize();
+        camera.position.addScaledVector(direction, -speed);
     }
 
-    // ✨ 修改：放宽移动限制
-    // 原来是 (3.5, 28)，导致走到亭子前就停住了
-    // 现在改为 (-15, 28)，允许穿过亭子(z=0)一直走到背面(-15)
-    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -15, 28);
+    // 左右横移 (A/D)
+    if (keyState.a || keyState.d) {
+        camera.getWorldDirection(direction);
+        direction.y = 0;
+        direction.normalize();
+        
+        // 计算右侧方向向量 (利用叉乘: 上方向 x 前方向 = 右方向)
+        const right = new THREE.Vector3();
+        right.crossVectors(camera.up, direction).normalize();
+
+        if (keyState.a) camera.position.addScaledVector(right, speed); // 向左 (其实是加负的右向量，或者直接用cross顺序调整，这里简单处理)
+        if (keyState.d) camera.position.addScaledVector(right, -speed); // 向右
+    }
+
+    // 🔒 边界限制 & 高度锁定
+    // 强制把高度锁定在 1.2米 (孩童身高)
+    camera.position.y = 1.2;
+    // 限制活动范围 (防止跑太远)
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -15, 35);
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -10, 10);
 }
-
-// ✨ 新增：处理鼠标移动 (360度环视)
-function onMouseMove(event) {
-    // 只有在第一人称模式且正在拖拽时才生效
-    if (!isFirstPersonMode || !isDragging) return;
-
-    const deltaMove = {
-        x: event.clientX - previousMousePosition.x,
-        y: event.clientY - previousMousePosition.y
-    };
-
-    // 旋转灵敏度
-    const sensitivity = 0.002;
-
-    // 左右旋转 (修改 Y 轴旋转)
-    camera.rotation.y -= deltaMove.x * sensitivity;
-
-    // 上下抬头 (修改 X 轴旋转)
-    camera.rotation.x -= deltaMove.y * sensitivity;
-
-    // 限制抬头低头的角度 (避免翻跟头)，限制在 -90度 到 90度 之间
-    const limit = Math.PI / 2 - 0.1;
-    camera.rotation.x = Math.max(-limit, Math.min(limit, camera.rotation.x));
-
-    // 更新上一次鼠标位置
-    previousMousePosition = { x: event.clientX, y: event.clientY };
-}
-
-// --- 原有功能函数 ---
 
 function loadPavilion() {
     const loader = new GLTFLoader();
     loader.load('aiwan_pavilion.glb', (gltf) => {
         mainModel = gltf.scene;
-        // ... 尺寸与位置调整保持不变 ...
         const box = new THREE.Box3().setFromObject(mainModel);
         const maxDim = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
         const scale = 5.5 / maxDim; 
@@ -157,204 +146,249 @@ function loadPavilion() {
         const center = box.getCenter(new THREE.Vector3()).multiplyScalar(scale);
         mainModel.position.sub(center); 
         mainModel.position.y = -box.min.y * scale; 
-        
-        // 旋转对齐道路
-        mainModel.rotation.y = -Math.PI / 2; 
+        mainModel.rotation.y = -Math.PI / 2;
 
-        // 材质
         mainModel.traverse(child => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
                 child.userData.baseMaterial = child.material.clone();
+                if(child.material.color) child.material.color.multiplyScalar(1.2);
                 child.material.clippingPlanes = [sectionPlane];
                 child.material.clipShadows = true;
                 child.material.side = THREE.DoubleSide;
+                const size = new THREE.Box3().setFromObject(child).getSize(new THREE.Vector3());
+                if(size.y > 2 && size.x < 1 && size.z < 1) child.userData.isPillar = true;
             }
         });
-        
         scene.add(mainModel);
-        createOverlayPillars();
         document.getElementById('loading').style.display = 'none';
-
-    }, undefined, (err) => {
-        console.error(err);
-        document.getElementById('loading').innerText = "加载失败，请检查 aiwan_pavilion.glb 文件位置";
-    });
+    }, undefined, (err) => console.error(err));
 }
 
-function createEnvironment() {
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x2b1b17, roughness: 1 }));
-    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+function onMouseClick(event) {
+    if (controls.enabled === false && !isFirstPersonMode) return; 
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
     
-    // 加长道路以适应行走
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 60), new THREE.MeshStandardMaterial({ color: 0x443333, roughness: 0.9 }));
-    path.rotation.x = -Math.PI / 2; 
-    // 调整道路位置使其延伸到脚下
-    path.position.set(0, 0.02, 10); 
-    path.receiveShadow = true; scene.add(path);
-
-    for (let i = 0; i < 30; i++) {
-        const x = (Math.random() > 0.5 ? 1 : -1) * (3.5 + Math.random() * 8);
-        const z = (Math.random() * 50) - 10; // 扩大树木分布范围
-        createLowPolyTree(x, 0, z);
+    if (interactMode === 'game') {
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        if (intersects.length > 0) {
+            const object = intersects[0].object;
+            if (object.userData.isPillar || object.userData.isProxyPillar) {
+                showToast("🎉 恭喜！找到一个圆柱体！积分+10");
+                score += 10;
+                document.getElementById('scoreBoard').innerText = "🏆 积分: " + score;
+                const oldColor = object.material.color.getHex();
+                object.material.color.setHex(0x00FF00);
+                setTimeout(() => { object.material.color.setHex(oldColor); }, 500);
+            } else {
+                showToast("❌ 这个不是圆柱体哦，再找找！");
+            }
+        }
+    } 
+    else if (interactMode === 'measure') {
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        if (intersects.length > 0) {
+            addMeasureMarker(intersects[0].point);
+        }
     }
 }
 
-function createLowPolyTree(x, y, z) {
-    const group = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 2.5, 6), new THREE.MeshStandardMaterial({ color: 0x332211 }));
-    trunk.position.y = 1.25; trunk.castShadow = true; group.add(trunk);
-    const colors = [0xc0392b, 0xd35400, 0xe67e22];
-    const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(2, 1), new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random()*3)], flatShading: true }));
-    leaves.position.y = 3.5; leaves.castShadow = true; leaves.scale.setScalar(0.8 + Math.random() * 0.4);
-    leaves.rotation.set(Math.random(), Math.random(), Math.random());
-    group.add(leaves);
-    group.position.set(x, y, z); group.scale.setScalar(0.7 + Math.random() * 0.5); scene.add(group);
-}
+let measureMarkers = []; let measureLine = null;
+function addMeasureMarker(point) {
+    if (measureMarkers.length >= 2) clearMeasurement();
+    const markerGeo = new THREE.SphereGeometry(0.15, 16, 16);
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0x1E90FF, depthTest: false });
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    marker.position.copy(point); marker.renderOrder = 999;
+    scene.add(marker); measureMarkers.push(marker);
 
-function createFallingLeaves() {
-    const leafCount = 400;
-    const geometry = new THREE.BufferGeometry();
-    const positions = [], speeds = [], offsets = [];
-    for (let i = 0; i < leafCount; i++) {
-        // 扩大落叶范围
-        positions.push((Math.random() - 0.5) * 50, Math.random() * 15 + 2, (Math.random() - 0.5) * 60 + 10);
-        speeds.push(0.01 + Math.random() * 0.04); offsets.push(Math.random() * Math.PI * 2);
+    if (measureMarkers.length === 2) {
+        const p1 = measureMarkers[0].position; const p2 = measureMarkers[1].position;
+        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const material = new THREE.LineBasicMaterial({ color: 0x1E90FF, linewidth: 3 });
+        measureLine = new THREE.Line(geometry, material); scene.add(measureLine);
+        const distance = p1.distanceTo(p2).toFixed(2);
+        document.getElementById('measure-result').style.display = 'block';
+        document.getElementById('distance-value').innerText = distance;
+        showToast(`📏 测量结果：${distance} 米`);
     }
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('speed', new THREE.Float32BufferAttribute(speeds, 1));
-    geometry.setAttribute('offset', new THREE.Float32BufferAttribute(offsets, 1));
-    const material = new THREE.PointsMaterial({ color: 0xff5500, size: 0.2, transparent: true, opacity: 0.9 });
-    leavesSystem = new THREE.Points(geometry, material);
-    scene.add(leavesSystem);
 }
-
-function animateLeaves() {
-    if (!leavesSystem || !leavesActive) return;
-    const positions = leavesSystem.geometry.attributes.position.array;
-    const speeds = leavesSystem.geometry.attributes.speed.array;
-    const offsets = leavesSystem.geometry.attributes.offset.array;
-    const time = Date.now() * 0.001;
-    for (let i = 0; i < positions.length / 3; i++) {
-        const idx = i * 3;
-        positions[idx + 1] -= speeds[i];
-        positions[idx] += Math.sin(time + offsets[i]) * 0.02;
-        positions[idx + 2] += Math.cos(time * 1.3 + offsets[i]) * 0.015;
-        if (positions[idx + 1] < 0) { positions[idx + 1] = 15 + Math.random() * 5; positions[idx] = (Math.random() - 0.5) * 50; }
-    }
-    leavesSystem.geometry.attributes.position.needsUpdate = true;
+function clearMeasurement() {
+    measureMarkers.forEach(m => scene.remove(m)); measureMarkers = [];
+    if (measureLine) { scene.remove(measureLine); measureLine = null; }
+    document.getElementById('measure-result').style.display = 'none';
 }
 
 function createProxyPillars() {
     const pillarDist = 1.4;
-    const pillarPos = [[pillarDist, pillarDist], [-pillarDist, pillarDist], [pillarDist, -pillarDist], [-pillarDist, -pillarDist]];
-    const pillarGeo = new THREE.CylinderGeometry(0.25, 0.28, 3.2, 16);
-    const pillarMat = new THREE.MeshStandardMaterial({ color: 0xd35400, roughness: 0.5, emissive: 0x552200 });
-    pillarPos.forEach(pos => {
-        const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-        pillar.position.set(pos[0], 1.6, pos[1]); pillar.castShadow = true;
-        pillar.userData.originPos = pillar.position.clone();
-        pillar.userData.explodeDir = new THREE.Vector3(pos[0], 0, pos[1]).normalize();
-        proxyPillarsGroup.add(pillar);
+    const posList = [[pillarDist, pillarDist], [-pillarDist, pillarDist], [pillarDist, -pillarDist], [-pillarDist, -pillarDist]];
+    const geo = new THREE.CylinderGeometry(0.28, 0.28, 2.5, 16);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xFF4500 });
+    posList.forEach(pos => {
+        const p = new THREE.Mesh(geo, mat);
+        p.position.set(pos[0], 1.25, pos[1]);
+        p.userData.originPos = p.position.clone();
+        p.userData.explodeDir = new THREE.Vector3(pos[0], 0, pos[1]).normalize();
+        p.userData.isProxyPillar = true; 
+        proxyPillarsGroup.add(p);
     });
     proxyPillarsGroup.visible = false; scene.add(proxyPillarsGroup);
 }
 
-function createOverlayPillars() {
-    const pillarDist = 1.4;
-    const pillarPos = [[pillarDist, pillarDist], [-pillarDist, pillarDist], [pillarDist, -pillarDist], [-pillarDist, -pillarDist]];
-    
-    // ✨ 修改：降低高度
-    // 原来是 height: 3.5, y: 1.75
-    // 现在改为 height: 2.1 (刚好到下檐), y: 1.05 (中心点)
-    const geo = new THREE.CylinderGeometry(0.28, 0.28, 2.1, 16);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.6 });
-    
-    pillarPos.forEach(pos => { 
-        const p = new THREE.Mesh(geo, mat); 
-        // y轴位置设为高度的一半，确保底部贴地
-        p.position.set(pos[0], 1.05, pos[1]); 
-        overlayPillarsGroup.add(p); 
-    });
-    
-    overlayPillarsGroup.visible = false; 
-    scene.add(overlayPillarsGroup);
+window.takeSnapshot = () => {
+    renderer.render(scene, camera);
+    const canvas = renderer.domElement;
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
+    const ctx = tempCanvas.getContext('2d');
+    ctx.drawImage(canvas, 0, 0);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.8)"; ctx.fillRect(20, canvas.height - 100, 400, 80);
+    ctx.strokeStyle = "#1E90FF"; ctx.lineWidth = 4; ctx.strokeRect(20, canvas.height - 100, 400, 80);
+    ctx.font = "bold 24px 'Microsoft YaHei'"; ctx.fillStyle = "#1E90FF"; ctx.fillText("☀️ 小小建筑师：探索者", 40, canvas.height - 60);
+    ctx.font = "16px 'Microsoft YaHei'"; ctx.fillStyle = "#555";
+    const date = new Date().toLocaleDateString(); ctx.fillText(`打卡时间：${date} | 智绘几何`, 40, canvas.height - 35);
+    const link = document.createElement('a'); link.download = `爱晚亭探索海报_${Date.now()}.png`;
+    link.href = tempCanvas.toDataURL('image/png'); link.click();
+    showToast("📸 海报已生成并下载！");
+};
+
+function createSunVisual() {
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(3,32,32), new THREE.MeshBasicMaterial({color:0xFFFF00}));
+    sun.position.set(15,20,10);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(4.5,32,32), new THREE.MeshBasicMaterial({color:0xFFD700, transparent:true, opacity:0.3}));
+    sun.add(glow); scene.add(sun);
 }
+// 🌳 创建明亮环境 (升级版：3D石板路)
+function createEnvironment() {
+    // 1. 草地 (保持不变)
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100), 
+        new THREE.MeshStandardMaterial({ color: 0x7CFC00 })
+    );
+    ground.rotation.x = -Math.PI / 2; 
+    ground.receiveShadow = true; 
+    scene.add(ground);
+    
+    // 2. ✨ 升级：程序化生成的 3D 石板路
+    // 移除原来的 new PlaneGeometry...
+    
+    const stoneGroup = new THREE.Group();
+    scene.add(stoneGroup);
 
-// --- 暴露给 HTML 调用的函数 ---
+    // 道路参数
+    const pathWidth = 4.0;
+    const pathLength = 60; // 对应之前的长度
+    const startZ = -20;    // 起始位置
+    const endZ = 40;       // 结束位置 (延伸到相机后面)
+    const stepSize = 1.2;  // 每一步的跨度
 
-window.updatePillarExplode = (val) => {
-    const factor = parseFloat(val);
-    if (factor > 0.1) {
-        proxyPillarsGroup.visible = true;
-        if (mainModel) mainModel.traverse(c => { if(c.isMesh) c.material.opacity = 0.3; c.material.transparent = true; });
-    } else {
-        proxyPillarsGroup.visible = false;
-        if (mainModel) mainModel.traverse(c => { if(c.isMesh) c.material.opacity = 1.0; c.material.transparent = false; });
+    // 石头颜色库 (不同的灰色和米色，营造真实感)
+    const stoneColors = [0x808080, 0x909090, 0xA9A9A9, 0xD3D3D3, 0x8B8378];
+
+    for (let z = startZ; z < endZ; z += stepSize) {
+        // 每一行铺 2-3 块石头，而不是整块大板，增加破碎感
+        const stonesInRow = Math.floor(Math.random() * 2) + 2; // 2 或 3 块
+        let currentX = -pathWidth / 2;
+
+        for (let i = 0; i < stonesInRow; i++) {
+            // 随机宽度
+            const width = (pathWidth / stonesInRow) * (0.8 + Math.random() * 0.4);
+            // 随机长度 (进深)
+            const length = stepSize * (0.8 + Math.random() * 0.3);
+            // 随机厚度 (让路面有微微起伏)
+            const height = 0.1 + Math.random() * 0.05; 
+
+            const geometry = new THREE.BoxGeometry(width, height, length);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: stoneColors[Math.floor(Math.random() * stoneColors.length)],
+                roughness: 0.9, // 粗糙质感
+            });
+            
+            const stone = new THREE.Mesh(geometry, material);
+            
+            // 计算位置 (加一点随机偏移，不要太整齐)
+            const xOffset = (pathWidth / stonesInRow) * i;
+            const randomX = (Math.random() - 0.5) * 0.2;
+            const randomZ = (Math.random() - 0.5) * 0.3;
+            const randomRot = (Math.random() - 0.5) * 0.05; // 微微旋转
+
+            stone.position.set(
+                currentX + (pathWidth/stonesInRow)/2 + randomX, 
+                0.05, // 稍微浮出草地
+                z + randomZ
+            );
+            
+            stone.rotation.y = randomRot;
+            stone.receiveShadow = true;
+            stone.castShadow = true; // 石头之间会有微弱阴影，更有立体感
+            
+            stoneGroup.add(stone);
+            
+            currentX += (pathWidth / stonesInRow);
+        }
     }
-    proxyPillarsGroup.children.forEach(pillar => {
-        const offset = pillar.userData.explodeDir.clone().multiplyScalar(factor * 1.5);
-        pillar.position.copy(pillar.userData.originPos).add(offset);
-    });
-};
 
-window.updateClipping = (val) => { sectionPlane.constant = parseFloat(val); };
-window.toggleOverlay = () => { overlayPillarsGroup.visible = !overlayPillarsGroup.visible; document.getElementById('btn-overlay').classList.toggle('active'); };
-window.toggleLeaves = () => { leavesActive = !leavesActive; leavesSystem.visible = leavesActive; };
-
-// ✨ 修改：切换场景时的核心逻辑
-window.switchStage = (num) => {
-    document.querySelectorAll('.panel-section').forEach(p => p.classList.remove('active'));
-    document.getElementById('panel-' + num).classList.add('active');
-    document.querySelectorAll('.stage-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.stage-btn')[num-1].classList.add('active');
-
-    if (num === 1) {
-        // 切换到场景一：开启第一人称模式
-        isFirstPersonMode = true;
-        controls.enabled = false; // 禁用轨道控制器
-        setupFirstPersonCamera(); // 重置回起点
-        document.querySelector('header div:last-child').innerText = "当前模式：第一人称行走";
-    } else {
-        // 切换到场景二/三：开启轨道观察模式
-        isFirstPersonMode = false;
-        controls.enabled = true; // 启用轨道控制器
-        // 设置一个适合观察的视角
-        camera.position.set(8, 6, 10); 
-        controls.target.set(0, 2, 0); // 设置旋转中心为亭子中部
-        controls.update();
-        document.querySelector('header div:last-child').innerText = "当前模式：轨道旋转观察";
+    // 3. 树木 (保持不变)
+    for (let i = 0; i < 30; i++) {
+        const x = (Math.random() > 0.5 ? 1 : -1) * (3.5 + Math.random() * 8);
+        const z = (Math.random() * 50) - 10;
+        createLowPolyTree(x, 0, z);
     }
-};
-
-// 移除了 toggleAutoRotate，因为第一人称模式下不需要
-// window.toggleAutoRotate = () => { controls.autoRotate = !controls.autoRotate; controls.autoRotateSpeed = 1.5; };
-
-window.snapView = (view) => { 
-    if(view === 'top') { 
-        // 切换到俯视图时，临时禁用第一人称
-        isFirstPersonMode = false;
-        controls.enabled = true;
-        camera.position.set(0, 15, 0); 
-        controls.target.set(0,0,0);
-        controls.update(); 
-        document.querySelector('header div:last-child').innerText = "当前模式：俯视图观察";
-    } 
-};
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
 }
+function createLowPolyTree(x,y,z) {
+    const g=new THREE.Group(), t=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.3,2.5,6), new THREE.MeshStandardMaterial({color:0x8B4513}));
+    t.position.y=1.25; t.castShadow=true; g.add(t);
+    const c=[0x32CD32,0xFFD700,0xFFA500], l=new THREE.Mesh(new THREE.IcosahedronGeometry(2,1), new THREE.MeshStandardMaterial({color:c[Math.floor(Math.random()*3)],flatShading:true}));
+    l.position.y=3.5; l.castShadow=true; l.scale.setScalar(0.8+Math.random()*0.4); g.add(l);
+    g.position.set(x,y,z); g.scale.setScalar(0.7+Math.random()*0.5); scene.add(g);
+}
+function createFallingLeaves() {
+    const geo=new THREE.BufferGeometry(), pos=[], spd=[];
+    for(let i=0;i<300;i++) { pos.push((Math.random()-0.5)*50, Math.random()*15+2, (Math.random()-0.5)*60+10); spd.push(0.02+Math.random()*0.03); }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3)); geo.setAttribute('speed', new THREE.Float32BufferAttribute(spd,1));
+    leavesSystem = new THREE.Points(geo, new THREE.PointsMaterial({color:0xFFA500, size:0.25, transparent:true})); scene.add(leavesSystem);
+}
+function showToast(msg) { const t=document.getElementById('toast'); t.innerText=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2000); }
+function setupFirstPersonCamera() { camera.position.set(0,1.2,25); camera.rotation.order='YXZ'; camera.rotation.set(0,0,0); }
+function onMouseMove(e) { if(!isFirstPersonMode||!isDragging) return; const s=0.002; camera.rotation.y-=(e.clientX-previousMousePosition.x)*s; camera.rotation.x-=(e.clientY-previousMousePosition.y)*s; camera.rotation.x=Math.max(-1.5,Math.min(1.5,camera.rotation.x)); previousMousePosition={x:e.clientX,y:e.clientY}; }
+function onWindowResize() { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); }
 
 function animate() {
     requestAnimationFrame(animate);
-    animateLeaves();
-    // 只有在非第一人称模式下才更新控制器
-    if (!isFirstPersonMode) {
-        controls.update();
-    }
+    
+    // ✨ 每一帧都更新移动逻辑 (WASD)
+    updateFirstPersonMovement();
+
+    if(leavesActive) { const p=leavesSystem.geometry.attributes.position.array; for(let i=0;i<p.length/3;i++) { p[i*3+1]-=0.05; if(p[i*3+1]<0) p[i*3+1]=15; } leavesSystem.geometry.attributes.position.needsUpdate=true; }
+    if(!isFirstPersonMode) controls.update();
     renderer.render(scene, camera);
 }
+
+// 暴露函数
+window.switchStage = (num) => {
+    document.querySelectorAll('.panel-section').forEach(p=>p.classList.remove('active')); document.getElementById('panel-'+num).classList.add('active');
+    document.querySelectorAll('.stage-btn').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.stage-btn')[num-1].classList.add('active');
+    if(num===1) { isFirstPersonMode=true; controls.enabled=false; setupFirstPersonCamera(); }
+    else if(num===2) { isFirstPersonMode=false; controls.enabled=true; camera.position.set(8,6,10); controls.target.set(0,2,0); controls.update(); }
+    else { isFirstPersonMode=false; controls.enabled=true; camera.position.set(5,5,8); controls.target.set(0,2,0); controls.update(); window.setInteractMode('game'); }
+};
+window.setInteractMode = (mode) => {
+    interactMode = mode;
+    clearMeasurement();
+    document.getElementById('btn-mode-game').classList.toggle('active', mode==='game');
+    document.getElementById('btn-mode-measure').classList.toggle('active', mode==='measure');
+    document.getElementById('game-instruction').style.display = mode==='game'?'block':'none';
+    proxyPillarsGroup.visible = true; 
+    showToast(mode==='game' ? "🔍 模式切换：寻找几何体" : "📏 模式切换：点击两点测量");
+};
+window.updatePillarExplode = (val) => { 
+    const f=parseFloat(val); proxyPillarsGroup.visible=f>0.1||!isFirstPersonMode; 
+    if(mainModel) mainModel.traverse(c=>{if(c.isMesh)c.material.opacity=f>0.1?0.3:1;c.material.transparent=true;});
+    proxyPillarsGroup.children.forEach(p=>p.position.copy(p.userData.originPos).add(p.userData.explodeDir.clone().multiplyScalar(f*1.5)));
+};
+window.updateClipping = (val) => { sectionPlane.constant=parseFloat(val); };
+window.toggleLeaves = () => { leavesActive=!leavesActive; leavesSystem.visible=leavesActive; };
+window.showHint = () => showToast("👀 提示：柱子是支撑屋顶的红色圆柱形物体");
