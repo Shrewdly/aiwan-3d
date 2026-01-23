@@ -1,47 +1,81 @@
-/* UI 风格 - 红叶深秋主题 */
-body { margin: 0; overflow: hidden; font-family: 'PingFang SC', sans-serif; background-color: #3e1e1e; }
+/* 全局设定 */
+body { margin: 0; overflow: hidden; font-family: 'Comic Sans MS', 'PingFang SC', sans-serif; background-color: #87CEEB; }
 
+/* 顶部导航 */
 header {
     position: absolute; top: 0; width: 100%; height: 60px;
-    background: rgba(255, 255, 255, 0.95);
-    border-bottom: 3px solid #c0392b;
+    background: rgba(255, 255, 255, 0.9);
+    border-bottom: 4px solid #FFD700;
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 20px; box-sizing: border-box; z-index: 100;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
 }
-.logo { font-size: 20px; font-weight: bold; color: #c0392b; }
+.logo { font-size: 20px; font-weight: 900; color: #1E90FF; }
+.header-tools { display: flex; gap: 10px; align-items: center; }
 
+/* 拍照按钮 */
+.icon-btn {
+    background: #ff7675; color: white; border: none; padding: 8px 15px;
+    border-radius: 20px; cursor: pointer; font-weight: bold;
+    box-shadow: 0 3px 0 #d63031; transition: 0.2s;
+}
+.icon-btn:active { transform: translateY(3px); box-shadow: none; }
+
+.score-board {
+    background: #FFD700; color: #d35400; padding: 5px 15px;
+    border-radius: 20px; font-weight: bold;
+}
+
+/* 侧边导航 */
 #stage-nav {
     position: absolute; top: 80px; left: 20px; display: flex; flex-direction: column; gap: 15px;
-    background: rgba(255,255,255,0.9); padding: 15px 10px; border-radius: 30px;
 }
 .stage-btn {
-    width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
-    background: #eee; font-weight: bold; color: #666; transition: 0.3s;
+    width: 50px; height: 50px; border-radius: 15px; border: 2px solid #fff; cursor: pointer;
+    background: #FFD700; font-size: 24px; transition: 0.2s;
+    box-shadow: 0 4px 0 #d35400;
 }
-.stage-btn.active { background: #c0392b; color: white; transform: scale(1.1); box-shadow: 0 4px 10px rgba(192, 57, 43, 0.5); }
+.stage-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #d35400; }
+.stage-btn.active { background: #1E90FF; color: white; border-color: #fff; }
 
+/* 控制面板 */
 #control-panel {
     position: absolute; top: 80px; right: 20px; width: 300px;
-    background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 12px;
-    border-left: 5px solid #c0392b; transition: 0.3s;
+    background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 20px;
+    border: 3px solid #1E90FF;
 }
 .panel-section { display: none; }
-.panel-section.active { display: block; animation: fadeIn 0.5s; }
+.panel-section.active { display: block; animation: popIn 0.3s; }
 
-h3 { margin: 0 0 10px 0; color: #c0392b; }
-p { font-size: 13px; color: #666; margin-bottom: 15px; }
+h3 { margin: 0 0 10px 0; color: #1E90FF; border-bottom: 2px dashed #ddd; padding-bottom: 5px; }
 
 .tool-btn {
-    width: 100%; padding: 10px; margin-bottom: 10px; background: white;
-    border: 1px solid #ddd; border-radius: 6px; cursor: pointer; color: #555;
+    width: 100%; padding: 12px; margin-bottom: 10px; background: #f0f9ff;
+    border: 1px solid #1E90FF; border-radius: 10px; cursor: pointer; color: #1E90FF; font-weight: bold;
 }
-.tool-btn:hover { background: #fff5f5; border-color: #c0392b; color: #c0392b; }
-.tool-btn.active { background: #c0392b; color: white; border-color: #c0392b; }
+.tool-btn:hover { background: #1E90FF; color: white; }
+/* 选中状态的按钮更明显 */
+.tool-btn.active { background: #1E90FF; color: white; box-shadow: 0 2px 8px rgba(30,144,255,0.4); }
 
-input[type=range] { width: 100%; accent-color: #c0392b; margin: 10px 0 20px 0; }
+input[type=range] { width: 100%; accent-color: #1E90FF; margin: 10px 0 20px 0; }
+label { font-size: 13px; font-weight: bold; color: #555; display: block; margin-bottom: 5px;}
+
+/* 测量标签 */
+.measure-label {
+    position: absolute; background: rgba(0,0,0,0.7); color: white;
+    padding: 4px 8px; border-radius: 4px; font-size: 12px;
+    pointer-events: none; display: none; z-index: 500;
+}
+
+#toast {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.8); color: #fff; padding: 15px 30px; border-radius: 50px;
+    font-size: 18px; pointer-events: none; opacity: 0; transition: 0.3s; z-index: 200;
+}
+.toast.show { opacity: 1; margin-top: -50px; }
 
 #loading {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: #c0392b; color: white; padding: 15px 30px; border-radius: 8px; pointer-events: none;
+    background: #1E90FF; color: white; padding: 15px 30px; border-radius: 10px; pointer-events: none;
 }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
