@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+// ✨ 新增：引入 HDR 加载器
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 // --- 变量池 ---
 let scene, camera, renderer, controls;
@@ -10,8 +12,8 @@ let proxyPillarsGroup = new THREE.Group();
 let score = 0;
 let interactMode = 'game'; 
 
-// 地形相关 (用于防止穿模)
-let terrainMesh = null; // ✨ 全局变量：存储地形，用于高度检测
+// 地形相关
+let terrainMesh = null;
 
 // 交互相关
 let raycaster = new THREE.Raycaster();
@@ -30,9 +32,7 @@ animate();
 
 function init() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // 默认背景
-    // 雾气稍微调淡，配合全景图
-    scene.fog = new THREE.Fog(0xccaa88, 10, 80); 
+    scene.background = new THREE.Color(0x87CEEB); // 加载前的底色
 
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
     setupFirstPersonCamera();
@@ -40,19 +40,20 @@ function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    
+    // ✨ 关键设置：HDR 需要电影级色调映射，否则会过曝一片白
     renderer.toneMapping = THREE.ACESFilmicToneMapping; 
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.9; // 调节曝光度 (越低越暗)
     renderer.localClippingEnabled = true;
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    // 灯光
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-    const sunLight = new THREE.DirectionalLight(0xffaa55, 1.5); 
-    sunLight.position.set(30, 50, 20);
+    // 灯光 (HDR 提供了环境光，但我们需要 DirectionalLight 产生投影)
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.5); 
+    sunLight.position.set(30, 50, 20); // 💡 提示：最好根据 HDR 里太阳的位置调整这里的坐标
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
+    // 扩大阴影范围
     sunLight.shadow.camera.near = 0.5;
     sunLight.shadow.camera.far = 200;
     sunLight.shadow.camera.left = -50;
@@ -66,7 +67,7 @@ function init() {
     controls.enabled = false;
 
     // --- 构建场景 ---
-    loadAutumnBackground(); // ✨ 改为本地加载
+    loadHDRBackground(); // ✨ 使用新的 HDR 加载函数
     createLowPolyTerrain(); 
     createStonePath();      
     createFallingLeaves();
@@ -85,25 +86,28 @@ function init() {
     document.addEventListener('mousemove', onMouseMove);
 }
 
-// 🍂 修复：改为加载本地文件
-function loadAutumnBackground() {
-    const loader = new THREE.TextureLoader();
+// ✨✨✨ 核心升级：加载 HDR 环境 ✨✨✨
+function loadHDRBackground() {
+    const loader = new RGBELoader();
     
-    // ⚠️ 请确保 web 文件夹里有这个图片文件！
-    const bgUrl = 'forest_cave.jpg'; 
+    // ⚠️ 确保 web 文件夹里有 sky.hdr 文件 (建议下载 2k 分辨率)
+    const bgUrl = 'sky.hdr'; 
     
     loader.load(bgUrl, (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
-        texture.colorSpace = THREE.SRGBColorSpace;
+        
         scene.background = texture;
-        scene.environment = texture; 
-        scene.fog = null; // 图片加载成功后移除雾气
+        scene.environment = texture; // 这句最关键！让模型反射 HDR 的光
+        
+        console.log("HDR 加载成功");
     }, undefined, (err) => {
-        console.error("背景加载失败，请检查 web 文件夹下是否有 park_panorama.jpg", err);
+        console.error("HDR 加载失败，请检查 web/sky.hdr 是否存在", err);
+        // 失败回退方案
+        scene.background = new THREE.Color(0x87CEEB);
     });
 }
 
-// ⛰️ 地形 (保存到全局变量 terrainMesh 以便检测高度)
+// ⛰️ 地形
 function createLowPolyTerrain() {
     const geometry = new THREE.PlaneGeometry(200, 200, 64, 64);
     const pos = geometry.attributes.position;
@@ -116,7 +120,6 @@ function createLowPolyTerrain() {
     geometry.computeVertexNormals(); 
     const material = new THREE.MeshStandardMaterial({ color: 0x556B2F, roughness: 1, flatShading: true });
     
-    // ✨ 赋值给全局变量
     terrainMesh = new THREE.Mesh(geometry, material);
     terrainMesh.rotation.x = -Math.PI / 2; 
     terrainMesh.receiveShadow = true;
@@ -130,15 +133,16 @@ function createLowPolyTerrain() {
     }
 }
 
-// 🏃 修复：加入地形贴合逻辑 (防止穿模)
+// 🏃 WASD 移动 + 防穿模
 function updateFirstPersonMovement() {
     if (!isFirstPersonMode) return;
     const speed = 0.25; 
     const dir = new THREE.Vector3();
     
-    // WASD 移动 (X/Z平面)
     if (keyState.w) { camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); camera.position.addScaledVector(dir, speed); }
     if (keyState.s) { camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); camera.position.addScaledVector(dir, -speed); }
+    
+    // 左右修正
     if (keyState.a || keyState.d) {
         camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); 
         const right = new THREE.Vector3(); right.crossVectors(camera.up, dir).normalize(); 
@@ -146,39 +150,24 @@ function updateFirstPersonMovement() {
         if (keyState.d) camera.position.addScaledVector(right, -speed);
     }
 
-    // ✨ 核心升级：地形高度检测 (Raycast Down)
-    // 只有当地形存在时才检测
+    // 地形高度检测
     if (terrainMesh) {
-        // 创建一个向下的射线检测器
         const downRay = new THREE.Raycaster();
-        // 从头顶上方很高的地方向下发射
         downRay.set(new THREE.Vector3(camera.position.x, 50, camera.position.z), new THREE.Vector3(0, -1, 0));
-        
         const intersects = downRay.intersectObject(terrainMesh);
         
         if (intersects.length > 0) {
-            // 地面高度
-            const groundHeight = intersects[0].point.y;
-            // 人的高度设定为 1.2 米
-            const eyeHeight = 1.2;
-            
-            // 平滑过渡 (可选，这里直接赋值更灵敏)
-            camera.position.y = groundHeight + eyeHeight;
+            camera.position.y = intersects[0].point.y + 1.2;
         } else {
-            // 如果走出了地形范围，保持默认高度
             camera.position.y = 1.2;
         }
-    } else {
-        camera.position.y = 1.2;
     }
 
-    // 边界限制
     camera.position.z = THREE.MathUtils.clamp(camera.position.z, -20, 45); 
-    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -20, 20); // 稍微放宽左右限制
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -20, 20);
 }
 
-// ... 保持其他函数不变 (createStonePath, createLowPolyTree, loadPavilion 等) ...
-// 请务必保留以下所有函数，不要删除！
+// ... 以下所有辅助函数保持不变，请务必保留 ...
 
 function createStonePath() {
     const group = new THREE.Group();
