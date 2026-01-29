@@ -2,76 +2,302 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>智绘几何 | AI 互动课堂</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>爱晚亭几何探索</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #b83b5e;
+            --accent-color: #f08a5d;
+            --text-dark: #333;
+            --panel-bg: rgba(255, 255, 255, 0.9);
+            --bg-color: #f8f9fa;
+        }
+        
+        html, body { 
+            margin: 0; padding: 0; 
+            width: 100%; height: 100%; 
+            font-family: 'ZCOOL XiaoWei', 'Microsoft YaHei', serif; 
+            overflow: hidden; 
+            background: url('bg_texture.jpg') center/cover no-repeat, 
+                        linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+        }
+
+        .app-wrapper { display: flex; flex-direction: column; height: 100%; }
+        .navbar { background: transparent; padding: 10px 0; flex-shrink: 0; z-index: 100; box-shadow: none; pointer-events: none; }
+        .container { max-width: 1500px; width: 90%; margin: 0 auto; padding: 0 20px; box-sizing: border-box; }
+
+        .nav-content { 
+            pointer-events: auto;
+            display: flex; justify-content: space-between; align-items: center; 
+            background: rgba(184, 59, 94, 0.9); padding: 8px 30px; border-radius: 50px; 
+            box-shadow: 0 4px 15px rgba(184, 59, 94, 0.3); border: 2px solid #fff; 
+        }
+        .logo { font-family: 'Ma Shan Zheng', cursive; font-size: 26px; color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .nav-tabs { display: flex; gap: 10px; background: rgba(0,0,0,0.1); padding: 4px; border-radius: 20px; }
+        .nav-tab { padding: 6px 16px; border-radius: 16px; cursor: pointer; font-size: 16px; transition: 0.2s; color: rgba(255,255,255,0.8); }
+        .nav-tab.active { background: white; color: var(--primary-color); font-weight: bold; }
+
+        .main-content { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; padding-bottom: 100px; }
+        .module-section { display: none; height: 100%; padding: 20px 0; box-sizing: border-box; }
+        .module-section.active { display: block; }
+        .feature-grid { display: grid; grid-template-columns: 320px 1fr; gap: 30px; height: 100%; align-items: stretch; }
+
+        .control-panel { 
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 2px solid var(--primary-color);
+            padding: 30px; 
+            height: fit-content; 
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            pointer-events: auto;
+        }
+        .control-panel h3 { border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 0; color: var(--primary-color); font-family: 'Ma Shan Zheng', cursive; text-align: center; font-size: 24px; }
+
+        .model-stage { width: 100%; height: 100%; background: #87CEEB; border-radius: 4px; overflow: hidden; position: relative; border: 8px solid #fff; outline: 2px solid #ddd; box-shadow: inset 0 0 20px rgba(0,0,0,0.2), 0 10px 30px rgba(0,0,0,0.15); pointer-events: auto; }
+        
+        body.fullscreen-mode .navbar, body.fullscreen-mode .control-panel, body.fullscreen-mode .bottom-nav, body.fullscreen-mode .section-header { display: none !important; }
+        body.fullscreen-mode .container, body.fullscreen-mode .app-wrapper, body.fullscreen-mode .main-content { padding: 0; margin: 0; max-width: none; height: 100%; }
+        body.fullscreen-mode .module-section { padding: 0; }
+        body.fullscreen-mode .feature-grid { display: block; width: 100%; height: 100%; }
+        body.fullscreen-mode .model-stage { position: fixed !important; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 999; border: none; outline: none; margin: 0; }
+        
+        body.fullscreen-mode #digital-human-container { z-index: 10000 !important; bottom: 40px; right: 40px; }
+
+        .fullscreen-btn { position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.6); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 50; transition: 0.2s; font-size: 18px; }
+        .fullscreen-btn:hover { background: rgba(0,0,0,0.8); transform: scale(1.1); }
+
+        .game-card {
+            background: #fffbf0; width: 500px; padding: 30px;
+            border-radius: 15px; border: 4px solid var(--primary-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center; position: relative;
+        }
+        .close-game { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: var(--primary-color); }
+        .game-options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .game-option { background: white; border: 2px solid #ddd; padding: 15px; border-radius: 10px; cursor: pointer; transition: 0.2s; font-size: 18px; color: var(--text-dark); }
+        .game-option:hover { background: #ffe6e6; border-color: var(--primary-color); }
+        .game-result { margin-top: 20px; font-size: 20px; font-weight: bold; min-height: 30px; }
+
+        .action-btn { width: 100%; padding: 12px 20px; border: 1px solid transparent; border-radius: 8px; margin-bottom: 12px; cursor: pointer; background: linear-gradient(145deg, #ffffff, #e6e6e6); box-shadow: 5px 5px 10px #d1d1d1, -5px -5px 10px #ffffff; font-family: 'ZCOOL XiaoWei', serif; font-size: 18px; color: #555; text-align: left; padding-left: 20px; transition: all 0.3s ease; position: relative; overflow: hidden; }
+        .action-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+        .action-btn.active { background: var(--primary-color) !important; color: white !important; border: 2px solid #ffd700; box-shadow: 0 0 15px rgba(184, 59, 94, 0.6); }
+        .action-btn::after { content: '❀'; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); opacity: 0.2; font-size: 16px; }
+        .action-btn i { margin-right: 10px; width: 24px; text-align: center; }
+        input[type=range] { width: 100%; accent-color: var(--primary-color); margin: 10px 0; }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: rgba(255,255,255,0.9); border-top: 1px solid #eee; backdrop-filter: blur(5px); display: flex; justify-content: space-around; padding: 8px 0; z-index: 200; height: 60px; box-sizing: border-box; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #999; font-size: 14px; cursor: pointer; transition: 0.2s; font-family: 'ZCOOL XiaoWei', serif; }
+        .nav-item i { font-size: 20px; margin-bottom: 4px; }
+        .nav-item.active { color: var(--primary-color); font-weight: bold; transform: scale(1.1); }
+        .nav-item.music-active { color: var(--primary-color); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+        /* 🔥🔥 核心修复：大幅提高 Z-Index 并允许鼠标事件 🔥🔥 */
+        #digital-human-container { 
+            position: fixed; bottom: 70px; right: 20px; 
+            z-index: 5000; /* 提到最高层级之一 */
+            display: flex; flex-direction: column; align-items: flex-end; 
+            transition: all 0.3s;
+            pointer-events: auto; /* 确保可点击 */
+        }
+        .video-wrapper { 
+            width: 100px; height: 100px; border-radius: 50%; overflow: hidden; background: white; 
+            cursor: pointer; /* 鼠标手势 */
+            transition: 0.3s; border: 4px solid #fff; box-shadow: 0 0 0 2px var(--primary-color), 0 8px 20px rgba(0,0,0,0.3); 
+        }
+        .video-wrapper:hover { transform: scale(1.05); }
+        #digital-human-video { width: 100%; height: 100%; object-fit: cover; }
+        
+        .chat-window { width: 300px; height: 350px; background-color: #fffbf0; border: 2px solid var(--primary-color); border-radius: 12px; margin-bottom: 15px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 5px 25px rgba(0,0,0,0.2); transition: 0.3s; transform-origin: bottom right; }
+        .chat-window.hidden { transform: scale(0); opacity: 0; height: 0; margin: 0; }
+        .chat-history { flex: 1; padding: 15px; overflow-y: auto; background: transparent; font-size: 14px; }
+        .message { margin-bottom: 10px; padding: 10px 14px; border-radius: 10px; max-width: 85%; line-height: 1.5; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .message.teacher { background-color: #fff; border-left: 4px solid var(--primary-color); align-self: flex-start; }
+        .message.user { background-color: var(--primary-color); color: #fff; align-self: flex-end; border-radius: 12px 12px 0 12px; }
+        .chat-input { display: flex; border-top: 1px solid #e0dac0; padding: 10px; background: #fffbf0; }
+        .chat-input input { flex: 1; border: 1px solid #d4c4a8; border-radius: 20px; padding: 8px 15px; outline: none; background: #fff; font-family: 'ZCOOL XiaoWei', serif; }
+        .chat-input button { margin-left: 8px; background: var(--primary-color); color: white; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; }
+
+        #intro-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .intro-card { background: #fffbf0; padding: 40px; border-radius: 20px; text-align: center; width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); animation: popIn 0.5s; border: 4px double var(--primary-color); }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .intro-card h1 { font-family: 'Ma Shan Zheng', cursive; color: var(--primary-color); font-size: 36px; margin-bottom: 10px; }
+        .start-btn { background: var(--primary-color); color: white; border: none; padding: 12px 40px; font-size: 20px; border-radius: 30px; cursor: pointer; margin-top: 20px; font-family: 'ZCOOL XiaoWei', serif; transition: 0.2s; box-shadow: 0 4px 15px rgba(184, 59, 94, 0.4); }
+        .start-btn:hover { transform: scale(1.05); background: #9c2e4e; }
+
+        #game-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:3000; justify-content:center; align-items:center; backdrop-filter:blur(5px); }
+        
+        /* 🔥 新增：通关奖励证书 🔥 */
+        #victory-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:6000; justify-content:center; align-items:center; backdrop-filter:blur(8px); }
+        .certificate { 
+            background: #fffbf0; width: 600px; padding: 40px; text-align: center; border-radius: 20px; 
+            border: 8px double #d4af37; /* 金色边框 */
+            box-shadow: 0 0 50px rgba(212, 175, 55, 0.6);
+            animation: popIn 0.8s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            position: relative; overflow: hidden;
+        }
+        .certificate::before { content: '♛'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 80px; color: rgba(212,175,55,0.2); }
+        .cert-title { font-family: 'Ma Shan Zheng', cursive; font-size: 48px; color: #d4af37; margin: 0; text-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
+        .cert-body { font-size: 20px; color: #555; margin: 30px 0; line-height: 1.6; }
+        .cert-seal { width: 100px; height: 100px; border: 4px solid #c0392b; color: #c0392b; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Ma Shan Zheng', cursive; font-size: 24px; position: absolute; bottom: 30px; right: 40px; transform: rotate(-15deg); opacity: 0.8; background: rgba(255,255,255,0.5); }
+
+        #story-ui { position: absolute; top: 80px; left: 20px; z-index: 500; display: none; }
+        .task-card { background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 10px; border: 2px solid var(--primary-color); margin-bottom: 10px; width: 250px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); backdrop-filter: blur(5px); }
+        #calc-panel { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:3500; }
+
+        #toast { position: fixed; top: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 25px; border-radius: 30px; font-size: 14px; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 1000; font-family: 'ZCOOL XiaoWei', serif; }
+        #toast.show { opacity: 1; top: 110px; }
+        #loading-mask { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); display:flex; justify-content:center; align-items:center; z-index:10; color: var(--primary-color); font-weight:bold; font-family: 'ZCOOL XiaoWei', serif; }
+    </style>
 </head>
 <body>
 
-    <header>
-        <div class="logo">☀️ 智绘几何 <span style="font-size:14px; color:#555; margin-left:10px;">AI 数学课堂</span></div>
-        <div class="header-tools">
-            <button class="icon-btn" onclick="window.takeSnapshot()" title="保存学习记录">📸 拍照打卡</button>
-            <div class="score-board" id="scoreBoard">🏆 积分: 0</div>
-        </div>
-    </header>
-
-    <div id="stage-nav">
-        <button class="stage-btn active" onclick="window.switchStage(1)" title="漫步模式">🏃</button>
-        <button class="stage-btn" onclick="window.switchStage(2)" title="解构模式">🔨</button>
-        <button class="stage-btn" onclick="window.switchStage(3)" title="几何工坊">📐</button>
-    </div>
-
-    <div id="control-panel">
-        <div id="panel-1" class="panel-section active">
-            <h3>🏫 场景一：漫步爱晚亭</h3>
-            <p>👋 <b>操作指南：</b><br><b>[W][A][S][D]</b> 移动<br><b>按住鼠标左键</b> 旋转视角</p>
-            <button class="tool-btn active" onclick="window.toggleLeaves()">🍃 自然落叶 (开/关)</button>
-        </div>
-
-        <div id="panel-2" class="panel-section">
-            <h3>📐 场景二：我是建筑师</h3>
-            <p>拖动滑块，观察古建筑的榫卯结构。</p>
-            <label>🏗️ 拆解屋顶</label>
-            <input type="range" min="0" max="3" step="0.1" value="0" oninput="window.updatePillarExplode(this.value)">
-            <label>🔍 X光透视</label>
-            <input type="range" min="-1" max="7" step="0.1" value="7" oninput="window.updateClipping(this.value)">
-        </div>
-
-        <div id="panel-3" class="panel-section">
-            <h3>🎮 场景三：几何工坊</h3>
-            <button class="tool-btn active" onclick="window.setInteractMode('game')">🔍 开始寻找圆柱体</button>
-            <p style="font-size:12px; color:#666; margin-top:10px;">点击场景中红色的柱子来完成任务。</p>
+    <div id="intro-overlay">
+        <div class="intro-card">
+            <h1>🎓 智慧几何课堂</h1>
+            <p style="color:#666; margin: 20px 0; font-size: 18px;">同学你好！我是<b>艾老师</b>。<br>准备好去爱晚亭探险了吗？</p>
+            <div style="display:flex; justify-content:center; gap:30px; margin: 25px 0;">
+                <div style="font-size:14px; color:#888; font-family:'ZCOOL XiaoWei',serif;">
+                    <i class="fas fa-keyboard" style="font-size:28px; color:var(--primary-color); display:block; margin-bottom:8px;"></i>
+                    WASD 移动
+                </div>
+                <div style="font-size:14px; color:#888; font-family:'ZCOOL XiaoWei',serif;">
+                    <i class="fas fa-mouse" style="font-size:28px; color:var(--primary-color); display:block; margin-bottom:8px;"></i>
+                    鼠标 旋转
+                </div>
+            </div>
+            <button class="start-btn" onclick="if(window.closeIntro) window.closeIntro(); else alert('资源加载中，请稍后再试！')">🚀 开始上课</button>
         </div>
     </div>
 
-    <div class="avatar-container" onclick="document.getElementById('chat-window').classList.remove('hidden'); window.askTeacher('welcome');">
-        <div class="avatar-img-wrapper">
-            <video id="digital-human-video" src="idle.mp4" class="avatar-img" autoplay loop muted playsinline></video>
+    <div id="victory-modal">
+        <div class="certificate">
+            <h1 class="cert-title">✨ 几何大师 ✨</h1>
+            <div class="cert-body">
+                <p>恭喜你！成功完成了所有挑战。</p>
+                <p>你已经掌握了圆柱体的<b>表面积</b>与<b>体积</b>奥秘。</p>
+                <p>爱晚亭因你的智慧而更加稳固！</p>
+            </div>
+            <div class="cert-seal">优秀<br>学员</div>
+            <button class="start-btn" onclick="document.getElementById('victory-modal').style.display='none'">🎓 领取证书</button>
         </div>
     </div>
 
-    <div class="chat-window" id="chat-window">
-        <div class="chat-header">
-            <span>🎓 艾老师在线</span>
-            <button class="close-btn" onclick="window.toggleChat()">×</button>
-        </div>
-        <div class="chat-messages" id="chat-history">
-            <div class="message teacher">同学们好！我是艾老师。<br>你可以直接在下面输入问题问我哦！👇</div>
-        </div>
-        <div class="chat-input-area">
-            <input type="text" id="user-input" placeholder="输入你的问题..." onkeypress="window.handleKeyPress(event)">
-            <button onclick="window.sendUserMessage()">发送</button>
+    <div id="story-ui">
+        <div class="task-card">
+            <h4 style="margin:0 0 8px 0; color:var(--primary-color); font-family:'Ma Shan Zheng',cursive; font-size:20px;">
+                <i class="fas fa-scroll"></i> 当前任务
+            </h4>
+            <p id="current-task" style="margin:0; font-size:15px; font-weight:bold; color:#333; line-height:1.4;">
+                准备中...
+            </p>
         </div>
     </div>
 
-    <div id="loading">🚀 正在加载 AI 课堂资源...</div>
-    <div id="canvas-container"></div>
-    <div id="toast" class="toast">消息提示</div>
+    <div id="calc-panel">
+        <div style="background:#fffbf0; padding:30px; border-radius:15px; border:4px solid var(--primary-color); box-shadow:0 10px 40px rgba(0,0,0,0.6); width:400px; text-align:center;">
+            <h3 id="calc-title" style="color:var(--primary-color); font-family:'Ma Shan Zheng',cursive; margin-top:0;">📐 立柱修缮图纸</h3>
+            <div id="calc-content" style="background:#fff; border:2px dashed #999; padding:15px; margin:15px 0; font-family:'Courier New', monospace; text-align:left; color:#555;">
+                <p>正在获取数据...</p>
+            </div>
+            <p style="font-size:14px; color:#666;">请输入计算结果：</p>
+            <input type="number" id="calc-input" style="font-size:20px; padding:8px; width:150px; text-align:center; border:2px solid #ddd; border-radius:8px; outline:none;">
+            <button onclick="if(window.submitCalculation) window.submitCalculation()" style="background:var(--primary-color); color:white; border:none; padding:10px 30px; font-size:18px; border-radius:20px; cursor:pointer; margin-left:10px; font-family:'ZCOOL XiaoWei', serif;">提交</button>
+            <p id="calc-feedback" style="height:20px; color:red; font-size:14px; margin-top:10px;"></p>
+        </div>
+    </div>
+
+    <div id="game-modal">
+        <div class="game-card">
+            <div class="close-game" onclick="if(window.closeGame) window.closeGame()">×</div>
+            <h2 style="color:var(--primary-color); font-family:'Ma Shan Zheng',cursive;">🧩 几何贤者挑战</h2>
+            <p style="font-size:18px; margin:20px 0;">请问：支撑爱晚亭屋顶的“内柱”是什么几何体？</p>
+            <div class="game-options">
+                <div class="game-option" onclick="if(window.checkAnswer) window.checkAnswer(this, false)">A. 长方体</div>
+                <div class="game-option" onclick="if(window.checkAnswer) window.checkAnswer(this, true)">B. 圆柱体</div>
+                <div class="game-option" onclick="if(window.checkAnswer) window.checkAnswer(this, false)">C. 圆锥体</div>
+                <div class="game-option" onclick="if(window.checkAnswer) window.checkAnswer(this, false)">D. 球体</div>
+            </div>
+            <div class="game-result" id="game-result"></div>
+        </div>
+    </div>
+
+    <div id="learning-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:4000; justify-content:center; align-items:center; backdrop-filter:blur(5px); animation: fadeIn 0.5s;">
+        <div style="width:90%; height:90%; max-width:1000px; background:#fff; border-radius:15px; position:relative; overflow:hidden; box-shadow: 0 0 30px rgba(255,255,255,0.2); border: 4px solid var(--primary-color);">
+            <button onclick="if(window.closeLearning) window.closeLearning()" style="position:absolute; top:10px; right:15px; background:var(--primary-color); color:#fff; border:none; width:40px; height:40px; border-radius:50%; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 2px 10px rgba(0,0,0,0.2);">×</button>
+            
+            <iframe id="learning-frame" src="" style="width:100%; height:100%; border:none;"></iframe>
+        </div>
+    </div>
+
+    <div class="app-wrapper">
+        <div class="navbar">
+            <div class="container nav-content">
+                <div class="logo"><i class="fas fa-shapes"></i> 爱晚亭几何</div>
+                <div class="nav-tabs">
+                    <div class="nav-tab active" onclick="if(window.switchModule) window.switchModule('stroll')">漫步</div>
+                    <div class="nav-tab" onclick="if(window.switchModule) window.switchModule('architect')">建筑师</div>
+                    <div class="nav-tab" onclick="if(window.switchModule) window.switchModule('workshop')">工坊</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container main-content">
+            <div id="stroll" class="module-section active">
+                <div class="feature-grid">
+                    <div class="control-panel">
+                        <h3><i class="fas fa-walking"></i> 自由漫步</h3>
+                        <button id="btn-person" class="action-btn active" onclick="if(window.setCameraView) window.setCameraView('person')"><i class="fas fa-street-view"></i> 我是游客</button>
+                        <button id="btn-top" class="action-btn" onclick="if(window.setCameraView) window.setCameraView('top')"><i class="fas fa-dove"></i> 我是小鸟</button>
+                        <button id="btn-front" class="action-btn" onclick="if(window.setCameraView) window.setCameraView('front')"><i class="fas fa-home"></i> 正面看</button>
+                        <hr style="margin:20px 0; border:0; border-top:1px dashed #ddd;">
+                        <button id="btn-leaves" class="action-btn" onclick="if(window.toggleLeaves) window.toggleLeaves()"><i class="fas fa-leaf"></i> 落叶开关</button>
+                        <button class="action-btn" onclick="if(window.takeSnapshot) window.takeSnapshot()"><i class="fas fa-camera"></i> 拍照打卡</button>
+                    </div>
+                    <div class="model-stage" id="canvas-wrapper-stroll">
+                        <div id="loading-mask"><i class="fas fa-spinner fa-spin"></i> 正在加载资源...</div>
+                        <button class="fullscreen-btn" onclick="if(window.toggleFullscreen) window.toggleFullscreen()" title="全屏"><i class="fas fa-expand"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="architect" class="module-section"><div class="feature-grid"><div class="control-panel"><h3><i class="fas fa-hard-hat"></i> 建筑解构</h3><p style="font-size:14px; color:#666; margin-bottom:15px; text-align:center;">试着拆开看看里面的结构！</p><label style="font-size:16px; color:#b83b5e; font-weight:bold;">💥 爆炸拆解</label><input type="range" id="explode-slider" min="0" max="1" step="0.01" value="0" oninput="if(window.updateExplosion) window.updateExplosion(this.value)"><div style="height:15px;"></div><label style="font-size:16px; color:#b83b5e; font-weight:bold;">👓 X光透视</label><input type="range" min="-2" max="12" step="0.1" value="12" oninput="if(window.updateClipping) window.updateClipping(this.value)"></div><div class="model-stage" id="canvas-wrapper-architect"><button class="fullscreen-btn" onclick="if(window.toggleFullscreen) window.toggleFullscreen()" title="全屏"><i class="fas fa-expand"></i></button></div></div></div>
+            <div id="workshop" class="module-section"><div class="feature-grid"><div class="control-panel"><h3><i class="fas fa-calculator"></i> 几何任务</h3><div style="background:#fff3cd; padding:15px; border-radius:8px; font-size:15px; color:#856404; margin-bottom:15px; border:1px solid #e0dac0;"><strong>📜 当前任务：</strong><br>找出支撑亭子的“红色圆柱体”。</div><button class="action-btn active" onclick="if(window.showHint) window.showHint()">👀 给我线索</button><div id="geometry-info" class="hidden" style="margin-top:15px; background:#d1e7dd; padding:15px; border-radius:8px; font-size:15px; color:#0f5132; border:1px solid #badbcc;">✅ <b>识别成功!</b><br>名称：内柱 (圆柱体)<br>特征：上下一样粗</div></div><div class="model-stage" id="canvas-wrapper-workshop"><button class="fullscreen-btn" onclick="if(window.toggleFullscreen) window.toggleFullscreen()" title="全屏"><i class="fas fa-expand"></i></button></div></div></div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active" data-target="stroll" onclick="if(window.switchModule) window.switchModule('stroll')"><i class="fas fa-walking"></i>漫步</div>
+        <div class="nav-item" data-target="architect" onclick="if(window.switchModule) window.switchModule('architect')"><i class="fas fa-layer-group"></i>结构</div>
+        <div class="nav-item" data-target="workshop" onclick="if(window.switchModule) window.switchModule('workshop')"><i class="fas fa-ruler-combined"></i>工坊</div>
+        <div id="btn-music" class="nav-item" onclick="if(window.toggleAudio) window.toggleAudio()"><i class="fas fa-music"></i>音乐</div>
+    </div>
+
+    <div id="toast"></div>
+    <audio id="bgm" loop><source src="bgm.mp3" type="audio/mpeg"></audio>
+    <div id="digital-human-container">
+        <div id="chat-window" class="chat-window hidden">
+            <div class="chat-history" id="chat-history"><div class="message teacher">同学们好！我是艾老师。点击【开始上课】后，我会带大家参观哦！</div></div>
+            <div class="chat-input"><input type="text" id="user-input" placeholder="问老师..." onkeypress="if(window.handleKeyPress) window.handleKeyPress(event)"><button onclick="if(window.sendUserMessage) window.sendUserMessage()"><i class="fas fa-paper-plane"></i></button></div>
+        </div>
+        <div class="video-wrapper" onclick="window.toggleChat()">
+            <video id="digital-human-video" src="idle.mp4" loop muted playsinline></video>
+        </div>
+    </div>
 
     <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
     </script>
     <script type="module" src="app.js"></script>
 </body>
 </html>
-
