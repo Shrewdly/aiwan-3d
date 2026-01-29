@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>探索圆柱体体积的奥秘</title>
+    
+    <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      },
+      svg: {
+        fontCache: 'global'
+      }
+    };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+
+    <style>
+        :root {
+            --primary-color: #4facfe;
+            --secondary-color: #00f2fe;
+            --accent-color: #ff9a9e;
+            --text-color: #333;
+            --bg-color: #f0f9ff;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0;
+            background: linear-gradient(120deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 0 0 30px 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        h1 { margin: 0; font-size: 2.2em; }
+        p.subtitle { font-size: 1.1em; opacity: 0.9; }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        }
+
+        h2 { color: #2c3e50; border-bottom: 3px solid var(--primary-color); display: inline-block; padding-bottom: 5px; }
+
+        .question-box {
+            background-color: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        /* 互动区域：堆硬币 */
+        .interactive-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #fdfdfd;
+            border: 2px dashed #ddd;
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 250px;
+        }
+
+        .coin-stack-container {
+            position: relative;
+            width: 200px;
+            height: 220px;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            border-bottom: 3px solid #333;
+        }
+
+        .coin {
+            width: 100px;
+            height: 15px;
+            background: linear-gradient(to right, #ffd700, #fdb931);
+            border: 1px solid #d4af37;
+            border-radius: 50%;
+            margin-top: -10px;
+            transition: all 0.3s;
+            position: absolute;
+            bottom: 0;
+            opacity: 0;
+        }
+
+        .slider-container { width: 100%; margin: 20px 0; text-align: center; }
+        input[type=range] { width: 80%; cursor: pointer; }
+
+        /* 公式展示 */
+        .formula-box {
+            font-size: 1.3em;
+            text-align: center;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 20px 0;
+            padding: 20px;
+            background: #e0f7fa;
+            border-radius: 10px;
+        }
+
+        /* 实验室可视化 */
+        .lab-visual {
+            width: 200px;
+            background: rgba(79, 172, 254, 0.3);
+            border: 2px solid var(--primary-color);
+            border-radius: 50% / 10%;
+            position: relative;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .lab-visual::before, .lab-visual::after {
+            content: ''; position: absolute; width: 100%; height: 20%; 
+            border-radius: 50%; background: inherit; border: 2px solid var(--primary-color); left: -2px;
+        }
+        .lab-visual::before { top: -10%; background: rgba(79, 172, 254, 0.6); }
+        .lab-visual::after { bottom: -10%; }
+
+        .result-box {
+            background: #333; color: #fff; padding: 10px 20px; border-radius: 10px;
+            font-size: 1.1em; display: flex; align-items: center; gap: 10px;
+        }
+
+        .btn {
+            background-color: var(--primary-color); color: white; padding: 12px 30px;
+            border: none; border-radius: 25px; cursor: pointer; font-size: 1.1em;
+        }
+        .btn:hover { transform: scale(1.05); transition: 0.2s; }
+
+        /* 切蛋糕示意图专用样式 */
+        .diagram-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        .step-visual {
+            text-align: center;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>📐 圆柱体体积的秘密</h1>
+    <p class="subtitle">让体积变身！从平面到立体的魔法</p>
+</header>
+
+<div class="container">
+
+    <section class="card">
+        <h2>1. 想一想：长方体的体积</h2>
+        <p>我们知道长方体像砖块一样，是由一层一层的面积堆起来的。</p>
+        <div class="question-box">
+            长方体体积 = <strong>底面积</strong> × <strong>高</strong> <br>
+            字母公式：$V = Sh$
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>2. 动动手：硬币堆叠魔法</h2>
+        <p>想象一下，圆柱体是不是也是由“一层一层”圆堆起来的？</p>
+        <div class="interactive-area">
+            <div class="coin-stack-container" id="coinStack"></div>
+        </div>
+        <div class="slider-container">
+            <label>堆叠层数：<span id="stackCount">0</span> 层</label><br>
+            <input type="range" min="0" max="20" value="0" id="stackSlider">
+        </div>
+        <div class="question-box" id="stackConclusion" style="display:none; text-align:center;">
+            ✨ 没错！圆柱的体积 = <strong>底面圆的大小</strong> × <strong>堆叠的高度</strong><br>
+            即：$V = Sh$
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>3. 验证一下：切蛋糕变形法</h2>
+        <p>如果把圆柱体切开拼起来，能不能变成长方体呢？我们来看一看过程：</p>
+        
+        <div class="diagram-container">
+            <div class="step-visual">
+                <svg width="150" height="150" viewBox="0 0 150 150">
+                    <circle cx="75" cy="40" r="35" fill="#ffd700" stroke="#d4af37" stroke-width="2"/>
+                    <line x1="75" y1="5" x2="75" y2="75" stroke="#fff" stroke-width="1"/>
+                    <line x1="40" y1="40" x2="110" y2="40" stroke="#fff" stroke-width="1"/>
+                    <line x1="50" y1="15" x2="100" y2="65" stroke="#fff" stroke-width="1"/>
+                    <line x1="50" y1="65" x2="100" y2="15" stroke="#fff" stroke-width="1"/>
+                    <path d="M40 40 L40 100 Q75 115 110 100 L110 40" fill="none" stroke="#d4af37" stroke-width="2" stroke-dasharray="5,5"/>
+                    <text x="75" y="130" text-anchor="middle" font-size="14">1. 切成小扇形</text>
+                </svg>
+            </div>
+
+            <div style="font-size: 2em; color: var(--primary-color);">➡</div>
+
+            <div class="step-visual">
+                <svg width="180" height="150" viewBox="0 0 180 150">
+                    <path d="M20 40 L30 30 L40 40 L50 30 L60 40 L70 30 L80 40 L90 30 L100 40 L110 30 L120 40 L130 30 L140 40" 
+                          fill="#ffd700" stroke="#d4af37" stroke-width="2"/>
+                    <path d="M20 100 L30 90 L40 100 L50 90 L60 100 L70 90 L80 100 L90 90 L100 100 L110 90 L120 100 L130 90 L140 100" 
+                          fill="none" stroke="#d4af37" stroke-width="2"/>
+                    <line x1="20" y1="40" x2="20" y2="100" stroke="#d4af37" stroke-width="2"/>
+                    <line x1="140" y1="40" x2="140" y2="100" stroke="#d4af37" stroke-width="2"/>
+                    <rect x="20" y="40" width="120" height="60" fill="rgba(255, 215, 0, 0.2)" stroke="none"/>
+                    
+                    <text x="80" y="130" text-anchor="middle" font-size="14">2. 拼插在一起</text>
+                </svg>
+            </div>
+        </div>
+
+        <div class="question-box">
+            <p><strong>观察发现：</strong></p>
+            <ul>
+                <li>这些“小扇形”互相咬合，拼成了一个<strong>近似的长方体</strong>。</li>
+                <li>长方体的<strong>底面积</strong>，就是原来圆柱的<strong>底面积</strong> ($\pi r^2$)。</li>
+                <li>长方体的<strong>高</strong>，就是原来圆柱的<strong>高</strong> ($h$)。</li>
+            </ul>
+        </div>
+        
+        <div class="formula-box">
+            所以：圆柱体积 $V = \pi r^2 h$
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>4. 小小实验室：我是设计师</h2>
+        <div class="interactive-area" style="flex-direction: row; gap: 30px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 250px;">
+                <label>半径 ($r$): <span id="rVal" style="color:blue">2</span> cm</label>
+                <input type="range" id="rInput" min="1" max="5" step="0.5" value="2" style="width: 100%;">
+                <br><br>
+                <label>高度 ($h$): <span id="hVal" style="color:blue">4</span> cm</label>
+                <input type="range" id="hInput" min="1" max="10" step="1" value="4" style="width: 100%;">
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                <div id="visualCylinder" class="lab-visual" style="width: 100px; height: 100px;"></div>
+                <div class="result-box">
+                    体积 $V \approx$ <span id="volumeResult" style="color: #00f2fe; margin: 0 5px;">50.24</span> cm³
+                </div>
+                <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                    $3.14 \times$ <span id="calcR">2²</span> $\times$ <span id="calcH">4</span>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <div style="text-align: center; margin-bottom: 50px;">
+        <button class="btn" onclick="alert('恭喜你通关！你是体积计算小能手！🎓')">🎉 我学会啦！</button>
+    </div>
+
+</div>
+
+<script>
+    // 互动1：硬币
+    const stackSlider = document.getElementById('stackSlider');
+    const coinStack = document.getElementById('coinStack');
+    const stackConclusion = document.getElementById('stackConclusion');
+    stackSlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        document.getElementById('stackCount').textContent = val;
+        coinStack.innerHTML = '';
+        for(let i=0; i<val; i++) {
+            const coin = document.createElement('div');
+            coin.className = 'coin';
+            coin.style.bottom = (i * 10) + 'px'; coin.style.zIndex = i;
+            setTimeout(() => { coin.style.opacity = 1; }, i * 30); 
+            coinStack.appendChild(coin);
+        }
+        stackConclusion.style.display = val > 5 ? 'block' : 'none';
+        if(val > 5 && window.MathJax) MathJax.typesetPromise([stackConclusion]);
+    });
+
+    // 互动2：实验室
+    const rInput = document.getElementById('rInput');
+    const hInput = document.getElementById('hInput');
+    const rVal = document.getElementById('rVal');
+    const hVal = document.getElementById('hVal');
+    const visualCylinder = document.getElementById('visualCylinder');
+    const volumeResult = document.getElementById('volumeResult');
+    const calcR = document.getElementById('calcR');
+    const calcH = document.getElementById('calcH');
+
+    function updateLab() {
+        const r = parseFloat(rInput.value);
+        const h = parseFloat(hInput.value);
+        rVal.textContent = r; hVal.textContent = h;
+        calcR.textContent = r + "²"; calcH.textContent = h;
+        
+        volumeResult.textContent = (3.14 * r * r * h).toFixed(2);
+        
+        visualCylinder.style.width = (r * 35) + 'px';
+        visualCylinder.style.height = (h * 18) + 'px';
+    }
+
+    rInput.addEventListener('input', updateLab);
+    hInput.addEventListener('input', updateLab);
+    updateLab();
+</script>
+
+</body>
+</html>
