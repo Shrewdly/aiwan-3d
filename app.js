@@ -19,7 +19,14 @@ let isFirstPersonMode = false;
 let isDragging = false;
 let mouseDownPos = new THREE.Vector2(); 
 let previousMousePosition = { x: 0, y: 0 };
-const keyState = { w: false, a: false, s: false, d: false };
+
+// 🔥 新增：按键状态增加 shift 和 space
+const keyState = { w: false, a: false, s: false, d: false, shift: false, k: false };
+
+// 🔥 新增：跳跃物理变量
+let playerVelocityY = 0;   // 垂直速度
+const GRAVITY = 0.035;     // 重力加速度
+const JUMP_FORCE = 0.1;   // 跳跃力度
 let currentAudioObj = null; 
 
 // ==========================================
@@ -62,7 +69,7 @@ class StoryManager {
         console.log("🎬 第一幕启动");
         this.currentAct = 1;
         this.step = 1;
-        window.setCameraView('top');
+        window.setCameraView('person');
         this.updateUI("👀 任务：寻找发出蓝光的立柱并点击它！");
         
         // 🔥🔥🔥 优化核心：使用“轮询”机制，直到找到柱子为止 🔥🔥🔥
@@ -129,7 +136,6 @@ class StoryManager {
     }
 
     // --- 统一交互处理 ---
-    // --- 统一交互处理 (修复版) ---
     handleInteraction(obj) {
         console.log(`🖱️ 点击物体: ${obj.userData.name || '未知部件'}, 状态: Act=${this.currentAct}, Step=${this.step}`);
 
@@ -382,7 +388,7 @@ class StoryManager {
             block.position.copy(pos);
             
             // ⚠️ 记得调整缩放
-            block.scale.set(0.3, 0.3, 0.3); 
+            block.scale.set(0.3, 0.7, 0.3); 
 
             scene.add(block);
             
@@ -449,7 +455,7 @@ class StoryManager {
 
             // --- 🎬 3. 开始动画 ---
             const targetPos = table.position.clone();
-            targetPos.y += 0.4; 
+            targetPos.y += 0.6; 
             
             chest.position.copy(targetPos);
             
@@ -465,12 +471,12 @@ class StoryManager {
                 if (progress < 0.4) {
                     const s = 0.2 + (progress / 0.4) * 0.8; // 变大
                     chest.scale.set(s, s, s);
-                    chest.rotation.y += 0.1; 
+                    chest.rotation.y += 0.3; 
                     chest.position.y = targetPos.y + Math.sin(progress * 10) * 0.5; 
                 } 
                 else if (progress < 0.8) {
                     chest.rotation.z = (Math.random() - 0.5) * 0.4; // 剧烈晃动
-                    chest.position.y = targetPos.y + 0.5;
+                    chest.position.y = targetPos.y + 0.7;
                 }
                 else {
                     chest.rotation.z = 0;
@@ -499,35 +505,111 @@ class StoryManager {
         }
     }
 
-    // 🔥🔥🔥 修复版：自动计算坐标，解决报错 🔥🔥🔥
-    spawnPaintBucket() {
-        // 1. 先找到桌子
-        const table = scene.children.find(c => c.userData.isWorktable);
+    // 🔥🔥🔥 新增：开启自由探索模式 (修复版：宝箱归位) 🔥🔥🔥
+    startFreeRoam() {
+        console.log("🚀 进入自由探索模式");
         
-        // 2. 定义 pos 变量 (之前报错就是因为少了这行！)
-        // 如果有桌子，就用桌子位置；如果没桌子，就用默认位置 (10, 0, 10)
+        // 1. 标记状态
+        this.currentAct = 99; 
+        this.step = 0;
+
+        // 2. 切换到“我是游客”视角
+        window.setCameraView('person');
+
+        // 3. 宝箱复位逻辑 (新增部分) 👇👇👇
+        const chest = scene.children.find(c => c.userData.isChestRoot);
+        if (chest) {
+            // 恢复到 loadChest 函数里设置的初始值
+            chest.position.set(0, 0.52, 0); 
+            chest.rotation.set(0, -Math.PI / 2, 0); 
+            chest.scale.set(0.2, 0.2, 0.2); 
+            console.log("📦 宝箱已归位");
+        }
+        // 👆👆👆 新增结束
+
+        // 4. 更新 UI
+        this.updateUI("🕊️ <b>自由探索模式</b><br>恭喜毕业！尽情漫步，欣赏爱晚亭的四季美景吧。");
+
+        // 5. 播放结束语
+        window.askTeacher('free_roam'); 
+        
+        // 6. 开启落叶
+        if (!leavesActive) {
+            window.toggleLeaves();
+        }
+
+        window.showToast("✨ 已切换至自由视角 (WASD移动 / Shift加速 / K跳跃)");
+    }
+
+    // 🔥 升级版：加载自定义油漆桶模型
+    spawnPaintBucket() {
+        // 1. 找到工作台
+        const table = scene.children.find(c => c.userData.isWorktable);
         const pos = table ? table.position.clone() : new THREE.Vector3(10, 0, 10);
         
-        // 3. 往右偏移一点，防止和第三关的木头重叠
-        pos.x += 0.2; 
+        // 2. 位置调整
+        pos.x += 0.3;  // 往右放一点，别挡住中间
+        pos.y += 0.45; // 抬高一点，放在桌面上 (根据之前的调试，桌面高度大概在这里)
 
-        const geo = new THREE.CylinderGeometry(0.2, 0.15, 0.4, 16);
-        const mat = new THREE.MeshStandardMaterial({color: 0xFF0000}); // 红色
-        const b = new THREE.Mesh(geo, mat);
-        
-        // 4. 设置位置 (放在桌面上)
-        b.position.copy(pos);
-        b.position.y += 0.6; 
-        
-        b.userData.isPaintBucket = true;
-        b.userData.isPart = true;
-        b.material.emissive = new THREE.Color(0xFFFF00);
-        b.material.emissiveIntensity = 0.5;
-        
-        scene.add(b);
-        console.log("🎨 油漆桶生成成功！位置:", pos); // 方便调试
-        if(window.showToast) window.showToast("🎨 油漆桶已出现在工作台！");
+        // 3. 加载模型
+        const loader = new GLTFLoader(manager);
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('./draco/');
+        loader.setDRACOLoader(dracoLoader);
+
+        // ⚠️ 请确保你的文件名是 'paint_bucket.glb'，如果是别的名字请在这里修改
+        loader.load('paint_bucket.glb', (gltf) => {
+            const bucket = gltf.scene;
+            
+            bucket.position.copy(pos);
+            
+            // 🔍 缩放调整：如果模型太大或太小，请改这里的数字
+            bucket.scale.set(0.3, 0.3, 0.3); 
+            
+            // 随机旋转一下，看起来更自然
+            bucket.rotation.y = Math.random() * Math.PI;
+
+            // 4. 关键：设置交互标签 (没有这些就点不动了！)
+            bucket.userData.isPaintBucket = true;
+            bucket.userData.isPart = true;
+
+            bucket.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    
+                    // 让子物体也继承标签，确保怎么点都能选中
+                    child.userData.isPaintBucket = true;
+                    child.userData.isPart = true;
+                    
+                    // 可选：给它加一点微弱的发光，让它显眼一点
+                    child.material.emissive = new THREE.Color(0x220000); 
+                }
+            });
+
+            scene.add(bucket);
+            console.log("🎨 自定义油漆桶加载成功！");
+            if(window.showToast) window.showToast("🎨 全新的油漆桶已送达！");
+            
+            dracoLoader.dispose();
+        }, undefined, (err) => {
+            console.error("❌ 油漆桶加载失败，请检查文件名是否正确", err);
+            // 💡 兜底：如果模型加载失败，还是生成一个红圆柱，防止卡关
+            this.spawnFallbackBucket(pos);
+        });
     }
+
+    // (可选) 兜底函数：万一模型没加载出来，用这个顶替
+    //spawnFallbackBucket(pos) {
+    //    const geo = new THREE.CylinderGeometry(0.2, 0.15, 0.4, 16);
+    //    const mat = new THREE.MeshStandardMaterial({color: 0xFF0000});
+    //    const b = new THREE.Mesh(geo, mat);
+    //    b.position.copy(pos);
+    //    b.position.y += 0.2; // 圆柱中心点要再高一点
+    //    b.userData.isPaintBucket = true;
+    //    b.userData.isPart = true;
+    //    scene.add(b);
+    //}
 
     showCalcPanel(act) {
         const panel = document.getElementById('calc-panel');
@@ -581,8 +663,8 @@ class StoryManager {
         const pos = table ? table.position.clone() : new THREE.Vector3(10,0,10);
         
         // 往左偏一点，放在桌子左侧
-        pos.x -= 0.2; 
-        pos.y += 0.3; // 确保在桌面之上
+        c.position.z -= 0.1; 
+        c.position.y += 0.57; 
 
         const group = new THREE.Group(); 
         group.position.copy(pos); 
@@ -627,14 +709,14 @@ class StoryManager {
             const t = scene.children.find(x => x.userData.isWorktable);
             if (t) {
                 c.position.copy(t.position);
-                c.position.x -= 0.6; 
-                c.position.y += 0.6; 
+                c.position.z -= 0.1; 
+                c.position.y += 0.67; 
             } else {
                 c.position.set(5, 1.6, 5);
             }
 
             // 4. 调整大小
-            c.scale.set(1.0, 1.0, 1.0);
+            c.scale.set(0.3, 0.7, 0.3);
             
             c.traverse(child => {
                 if(child.isMesh) {
@@ -664,32 +746,6 @@ class StoryManager {
             console.error("加载钥匙模型失败", err);
         });
     }
-
-    // 🔥 修复版：自动找桌子 + 往右偏移 (解决报错)
-    spawnPaintBucket() {
-        const table = scene.children.find(c => c.userData.isWorktable);
-        // 定义 pos 变量，防止报错
-        const pos = table ? table.position.clone() : new THREE.Vector3(10, 0, 10);
-        
-        // 往右偏一点，防止和木料重叠
-        pos.x += 0.8; 
-
-        const geo = new THREE.CylinderGeometry(0.2, 0.15, 0.4, 16); 
-        const mat = new THREE.MeshStandardMaterial({color: 0xFF0000});
-        const b = new THREE.Mesh(geo, mat); 
-        
-        b.position.copy(pos); 
-        b.position.y += 0.6; 
-        
-        b.userData.isPaintBucket = true; 
-        b.userData.isPart = true; 
-        b.material.emissive = new THREE.Color(0xFFFF00); 
-        b.material.emissiveIntensity = 0.5;
-        
-        scene.add(b);
-        if(window.showToast) window.showToast("🎨 油漆桶已生成！");
-    }
-
     updateUI(text) {
         const ui = document.getElementById('story-ui'); 
         if (ui) ui.style.display = 'block';
@@ -961,15 +1017,59 @@ window.askTeacher = (actionType) => {
     });
 };
 
+// 🔥🔥🔥 优化版：根据不同模式，给摄像机更酷的运镜 🔥🔥🔥
 window.switchStage = (n) => {
+    // 重置一些通用状态
     window.updateExplosion(0);
     window.updateClipping(12);
     const slider = document.getElementById('explode-slider');
     if(slider) slider.value = 0;
+    
+    // 确保控制器启用
+    if(controls) {
+        controls.enabled = true;
+        controls.autoRotate = false; // 默认关闭旋转
+    }
 
-    if(n === 1) { window.setCameraView('person'); window.askTeacher('welcome'); }
-    else if(n === 2) { window.setCameraView('top'); window.askTeacher('stage_2'); }
-    else { window.setCameraView('front'); interactMode = 'game'; window.askTeacher('stage_3'); }
+    if(n === 1) { 
+        // --- 漫步模式 ---
+        // 恢复第一人称或之前的视角
+        window.setCameraView('person'); 
+        window.askTeacher('welcome'); 
+    }
+    else if(n === 2) { 
+        // --- 结构模式 (优化) ---
+        // 变成上帝视角 + 自动旋转展示
+        isFirstPersonMode = false;
+        camera.position.set(20, 15, 20); // 侧上方俯视
+        camera.lookAt(0, 5, 0);
+        if(controls) {
+            controls.target.set(0, 5, 0);
+            controls.autoRotate = true; // ✨ 开启自动旋转，像展厅一样
+            controls.autoRotateSpeed = 1.0;
+        }
+        window.askTeacher('stage_2'); 
+    }
+    else { 
+        // --- 工坊模式 (优化) ---
+        // 变成工作台特写视角，不再是看亭子
+        isFirstPersonMode = false;
+        
+        // 找到工作台的位置 (根据之前代码是 0, 0.4, -4)
+        // 让摄像机飞到工作台面前
+        camera.position.set(0, 3, 2); // 人站在桌子前上方
+        camera.lookAt(0, 0, -4);      // 盯着桌子中心
+        
+        if(controls) {
+            controls.target.set(0, 0.5, -4); // 旋转中心设在桌子上
+            controls.enablePan = false; // 禁止平移，防止用户迷路
+            controls.minDistance = 2;   // 限制缩放，不让太近
+            controls.maxDistance = 10;  // 限制缩放，不让太远
+        }
+        
+        interactMode = 'game'; 
+        window.askTeacher('stage_3'); 
+    }
     
     setTimeout(onWindowResize, 100);
 };
@@ -1047,8 +1147,23 @@ function init() {
 
     window.addEventListener('resize', onWindowResize);
     window.addEventListener('wheel', onMouseWheel, { passive: false });
-    document.addEventListener('keydown', (e) => { if(keyState.hasOwnProperty(e.key.toLowerCase())) keyState[e.key.toLowerCase()] = true; });
-    document.addEventListener('keyup', (e) => { if(keyState.hasOwnProperty(e.key.toLowerCase())) keyState[e.key.toLowerCase()] = false; });
+// 🔥 替换后的按键监听：支持 Shift(加速) 和 空格(跳跃)
+    document.addEventListener('keydown', (e) => { 
+        const key = e.key.toLowerCase();
+        // 处理 WASD
+        if(keyState.hasOwnProperty(key)) keyState[key] = true; 
+        // 处理 Shift 加速
+        if(e.key === 'Shift') keyState.shift = true;
+        // 处理 空格 跳跃
+        if(e.key === 'k') keyState.k = true;
+    });
+
+    document.addEventListener('keyup', (e) => { 
+        const key = e.key.toLowerCase();
+        if(keyState.hasOwnProperty(key)) keyState[key] = false; 
+        if(e.key === 'Shift') keyState.shift = false;
+        if(e.key === 'k') keyState.k = false;
+    });
     window.addEventListener('blur', () => { keyState.w=false; keyState.a=false; keyState.s=false; keyState.d=false; isDragging=false; });
     
     window.setCameraView('top');
@@ -1445,10 +1560,16 @@ function createFallingLeaves() {
 }
 
 function setupFirstPersonCamera() { 
-    camera.position.set(0,1.2,40); 
+    // 🔥 修改：把 Z 轴从 40 改为 20，离亭子更近
+    camera.position.set(0, 1.2, 20); 
+    
     camera.rotation.order='YXZ'; 
     camera.rotation.set(0,0,0); 
+    
+    // 重置物理状态
+    playerVelocityY = 0;
 }
+
 function onMouseWheel(e) { 
     if(!isFirstPersonMode) return; 
     e.preventDefault(); const s=0.8; 
@@ -1467,14 +1588,75 @@ function onMouseMove(e) {
     previousMousePosition = {x: e.clientX, y: e.clientY}; 
 }
 
+// 🔥🔥🔥 完美修复版：K键跳跃 + 修复左右反向 + 降低高度 🔥🔥🔥
 function updateFirstPersonMovement() { 
     if (!isFirstPersonMode) return; 
-    const speed = 0.25; const dir = new THREE.Vector3(); 
-    if (keyState.w) { camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); camera.position.addScaledVector(dir, speed); } 
-    if (keyState.s) { camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); camera.position.addScaledVector(dir, -speed); } 
-    if (keyState.a || keyState.d) { camera.getWorldDirection(dir); dir.y = 0; dir.normalize(); const right = new THREE.Vector3(); right.crossVectors(camera.up, dir).normalize(); if (keyState.a) camera.position.addScaledVector(right, speed); if (keyState.d) camera.position.addScaledVector(right, -speed); } 
-    if (terrainMesh) { const downRay = new THREE.Raycaster(); downRay.set(new THREE.Vector3(camera.position.x, 50, camera.position.z), new THREE.Vector3(0, -1, 0)); const intersects = downRay.intersectObject(terrainMesh); if (intersects.length > 0) camera.position.y = intersects[0].point.y + 1.2; else camera.position.y = 1.2; } 
-    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -30, 50); camera.position.x = THREE.MathUtils.clamp(camera.position.x, -30, 30); 
+
+    // 1. 计算移动速度 (Shift 加速)
+    const baseSpeed = 0.15;
+    const runMultiplier = 2.5; 
+    const currentSpeed = keyState.shift ? (baseSpeed * runMultiplier) : baseSpeed;
+
+    // 2. 水平移动 (WASD)
+    const dir = new THREE.Vector3(); 
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+
+    camera.getWorldDirection(forward); 
+    forward.y = 0; forward.normalize(); 
+    
+    // 🛠️ 核心修复：交换叉乘顺序 (forward x up = right)
+    // 之前是 (up x forward) 算出的是左边，导致 A/D 反向
+    right.crossVectors(forward, camera.up).normalize(); 
+
+    if (keyState.w) dir.add(forward);
+    if (keyState.s) dir.sub(forward);
+    if (keyState.d) dir.add(right); // 现在 D 是往右
+    if (keyState.a) dir.sub(right); // 现在 A 是往左
+
+    if (dir.lengthSq() > 0) {
+        dir.normalize();
+        camera.position.addScaledVector(dir, currentSpeed);
+    }
+
+    // 3. 垂直物理 (跳跃 & 重力)
+    let groundHeight = 0; 
+    if (terrainMesh) { 
+        const downRay = new THREE.Raycaster(); 
+        downRay.set(new THREE.Vector3(camera.position.x, 100, camera.position.z), new THREE.Vector3(0, -1, 0)); 
+        const intersects = downRay.intersectObject(terrainMesh); 
+        if (intersects.length > 0) {
+            groundHeight = intersects[0].point.y;
+        }
+    }
+
+    const playerHeight = 1.2;
+    const groundLevel = groundHeight + playerHeight;
+    const onGround = camera.position.y <= (groundLevel + 0.05);
+
+    if (onGround) {
+        camera.position.y = groundLevel; 
+        playerVelocityY = 0; 
+
+        // 👉 改为检测 K 键
+        if (keyState.k) {
+            playerVelocityY = JUMP_FORCE; 
+            camera.position.y += 0.1; 
+        }
+    } else {
+        playerVelocityY -= GRAVITY; 
+    }
+
+    camera.position.y += playerVelocityY;
+
+    // 4. 边界限制
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -30, 50); 
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -30, 30); 
+    
+    if (camera.position.y < -5) {
+        camera.position.set(0, 1.2, 20); 
+        playerVelocityY = 0;
+    }
 }
 
 function animate() { 
@@ -1500,8 +1682,9 @@ window.sendUserMessage = () => {
     window.askTeacher(text); 
 };
 
-// 在 script 标签内或 app.js 底部添加
+// 🔥🔥🔥 修复版：切换模块时，自动搬运画布，解决蓝屏问题 🔥🔥🔥
 window.switchModule = (moduleName) => {
+    // 1. UI 切换逻辑 (保持不变)
     document.querySelectorAll('.module-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
@@ -1509,13 +1692,30 @@ window.switchModule = (moduleName) => {
     const target = document.getElementById(moduleName);
     if(target) target.classList.add('active');
     
-    // 关联底部导航状态
     const navItem = document.querySelector(`.nav-item[data-target="${moduleName}"]`);
     if(navItem) navItem.classList.add('active');
     
+    // 2. 🔥 核心修复：把 3D 画布搬运到当前模块的容器里 🔥
+    const canvasContainerId = `canvas-wrapper-${moduleName}`;
+    const newContainer = document.getElementById(canvasContainerId);
+    
+    if (newContainer && renderer && renderer.domElement) {
+        // 如果画布不在当前容器里，就把它搬过来
+        if (!newContainer.contains(renderer.domElement)) {
+            newContainer.appendChild(renderer.domElement);
+            console.log(`🎨 画布已搬运至: ${moduleName}`);
+        }
+    }
+
+    // 3. 触发场景逻辑切换
     if(moduleName === 'stroll') window.switchStage(1);
     else if(moduleName === 'architect') window.switchStage(2);
     else if(moduleName === 'workshop') window.switchStage(3);
+    
+    // 4. 强制刷新尺寸，防止画面变形
+    setTimeout(() => {
+        onWindowResize();
+    }, 50);
 };
 
 window.toggleChat = () => {
@@ -1567,6 +1767,20 @@ window.closeLearning = () => {
             window.currentLearningCallback();
             window.currentLearningCallback = null;
         }
+    }
+};
+
+// 🔥🔥🔥 新增：点击证书按钮后调用的函数 🔥🔥🔥
+window.enterFreeExploration = () => {
+    // 1. 关闭证书弹窗
+    const modal = document.getElementById('victory-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+
+    // 2. 启动自由模式
+    if (storyMgr) {
+        storyMgr.startFreeRoam();
     }
 };
 
