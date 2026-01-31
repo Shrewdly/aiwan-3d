@@ -273,7 +273,7 @@
     </section>
     
     <div style="text-align: center; margin-bottom: 50px;">
-        <button class="btn" onclick="alert('恭喜你通关！你是体积计算小能手！🎓')">🎉 我学会啦！</button>
+        <button class="btn" onclick="finishClass()">🎉 我学会啦！回到工坊开宝箱 🎁</button>
     </div>
 
 </div>
@@ -318,6 +318,19 @@
         
         visualCylinder.style.width = (r * 35) + 'px';
         visualCylinder.style.height = (h * 18) + 'px';
+    }
+
+    // 🔥🔥🔥 新增：完成课程函数 🔥🔥🔥
+    function finishClass() {
+        // 1. 先给个鼓励
+        alert('恭喜你通关！你是体积计算小能手！🎓\n现在回到游戏去开启宝箱吧！');
+        
+        // 2. 调用父窗口(app.js)的关闭函数
+        if (window.parent && window.parent.closeLearning) {
+            window.parent.closeLearning();
+        } else {
+            console.error("无法连接到游戏主程序");
+        }
     }
 
     rInput.addEventListener('input', updateLab);
